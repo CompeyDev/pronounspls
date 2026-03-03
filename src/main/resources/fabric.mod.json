@@ -1,0 +1,39 @@
+{
+	"schemaVersion": 1,
+	"id": "pronounsplus",
+	"version": "${version}",
+	"name": "Pronouns+",
+	"description": "Server-side fabric mod that allows players to display their preferred pronouns!",
+	"authors": [
+		{
+			"name": "DevComp",
+			"contact": {
+				"email": "hi@devcomp.xyz",
+				"homepage": "https://devcomp.xyz"
+			}
+		}
+	],
+	"contributors": [],
+	"contact": {
+		"homepage": "https://modrinth.com/mod/pronounsplus",
+		"sources": "https://github.com/CompeyDev/pronounsplus",
+		"issues": "https://github.com/CompeyDev/pronounsplus/issues"
+	},
+	"license": "LGPL-3.0",
+	"icon": "assets/pronounsplus/icon.png",
+	"environment": "server",
+	"entrypoints": {
+		"server": [
+			"xyz.devcomp.pronounsplus.PronounsPlus"
+		]
+	},
+	"mixins": [
+		"pronounsplus.mixins.json"
+	],
+	"depends": {
+		"java": "${java_version}",
+		"minecraft": "${minecraft_version}",
+		"fabricloader": "${loader_version}",
+		"fabric-api": "*"
+    }
+}
