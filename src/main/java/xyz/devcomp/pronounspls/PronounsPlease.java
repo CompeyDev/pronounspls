@@ -3,6 +3,10 @@ package xyz.devcomp.pronounspls;
 import java.util.EnumSet;
 import java.util.List;
 
+import net.fabricmc.fabric.api.resource.ResourceManagerHelper;
+import net.fabricmc.fabric.api.resource.v1.ResourceLoader;
+import net.minecraft.resource.ResourceType;
+import net.minecraft.text.Text;
 import net.minecraft.util.Identifier;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.network.ServerPlayerEntity;
@@ -31,9 +35,20 @@ public class PronounsPlease implements DedicatedServerModInitializer {
     public static final String MOD_ID = "pronounspls";
     public static final Identifier PRONOUNS_MESSAGE_TYPE_ID = Identifier.of(MOD_ID, "chat_pronouns_format");
 
+    private final Text ANY_PRONOUNS = Text.literal(
+        PronounsTranslationManager
+            .INSTANCE
+            .translate("en_us", "pronounspls.pronouns.any")
+    );
+
 	@Override
 	public void onInitializeServer() {
 		LOGGER.info("Hello, pronouns!");
+
+        // Register translations lookup resource loader
+        ResourceLoader
+            .get(ResourceType.SERVER_DATA)
+            .registerReloader(PronounsTranslationManager.getFabricId(), PronounsTranslationManager.INSTANCE);
 
         ServerLifecycleEvents.SERVER_STARTED.register(s -> server = s);
         DynamicRegistrySetupCallback.EVENT.register(registryView -> {
@@ -53,11 +68,11 @@ public class PronounsPlease implements DedicatedServerModInitializer {
 
         // For nametags and virtual team management
         ServerPlayConnectionEvents.JOIN.register(((handler, _sender, s) -> {
-            PronounsTeamManager.syncToPlayer(handler.player);
-            PronounsTeamManager.setPronouns(handler.player, "they/them", s);
+            PronounsTeamManager.setPronouns(handler.player, "pronounspls.pronouns.any", s);
+            PronounsTeamManager.syncToPlayer(handler.player, s);
         }));
         ServerPlayConnectionEvents.DISCONNECT.register(((handler, s) -> PronounsTeamManager.removePronouns(handler.player , s)));
-	}
+    }
 
     /**
      * Syncs the player list entry for a specific player for all clients. Typically

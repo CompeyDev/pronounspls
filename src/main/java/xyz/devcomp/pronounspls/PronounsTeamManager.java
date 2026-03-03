@@ -19,86 +19,93 @@ import net.minecraft.util.Formatting;
  */
 public class PronounsTeamManager {
 
-    // One fake scoreboard used purely to construct Team objects for packets
-    private static final Scoreboard FAKE_SCOREBOARD = new Scoreboard();
-
-    // Map of player UUID -> their current virtual team
-    private static final Map<UUID, Team> virtualTeams = new HashMap<>();
+    // Map of player UUID -> their current pronouns translation key
+    private static final Map<UUID, String> playerPronouns = new HashMap<>();
 
     /**
-     * Sets pronouns for a player and requests an update for all connected clients.
+     * Sets pronouns for a player and sends translated packets to all connected clients.
      *
-     * @param player  the player to set pronouns for
-     * @param pronouns the pronouns string
-     * @param server  the minecraft server instance
+     * @param player      the player to set pronouns for
+     * @param pronounsKey the translation key for the pronouns (e.g. "pronounspls.pronouns.he")
+     * @param server      the minecraft server instance
      */
-    public static void setPronouns(ServerPlayerEntity player, String pronouns, MinecraftServer server) {
-        UUID uuid = player.getUuid();
-
-        // Remove existing virtual team if present
+    public static void setPronouns(ServerPlayerEntity player, String pronounsKey, MinecraftServer server) {
+        PronounsPlease.LOGGER.info("Setting pronouns for {} to {}", player.getStringifiedName(), pronounsKey);
         removePronouns(player, server);
+        playerPronouns.put(player.getUuid(), pronounsKey);
 
-        // Create a team and add player to it
-        String teamName = PronounsPlease.MOD_ID + "_" + uuid.toString();
-        Team team = FAKE_SCOREBOARD.addTeam(teamName);
-        team.setSuffix(Text.literal(" [" + pronouns + "]").formatted(Formatting.GRAY));
-
-        team.getPlayerList().add(player.getStringifiedName()); // FIXME: does this work?
-        virtualTeams.put(uuid, team);
-
-        // Send sync packet to all clients
-        TeamS2CPacket packet = TeamS2CPacket.updateTeam(team, true);
-        server.getPlayerManager().sendToAll(packet);
+        // Send a translated packet to each connected player
+        for (ServerPlayerEntity recipient : server.getPlayerManager().getPlayerList()) {
+            sendTeamPacket(player, pronounsKey, recipient, true);
+        }
     }
 
     /**
-     * Removes the pronouns for a player, destroys the virtual team, and requests an update
-     * for all connected clients.
+     * Removes the pronouns for a player, destroys the virtual team on all clients.
      *
      * @param player the player to remove pronouns for
      * @param server the minecraft server instance
      */
     public static void removePronouns(ServerPlayerEntity player, MinecraftServer server) {
-        UUID uuid = player.getUuid();
-        Team existingTeam = virtualTeams.remove(uuid);
-        if (existingTeam != null) {
-            TeamS2CPacket removePacket = TeamS2CPacket.updateRemovedTeam(existingTeam);
-            server.getPlayerManager().sendToAll(removePacket);
-            FAKE_SCOREBOARD.removeTeam(existingTeam);
-        }
+        PronounsPlease.LOGGER.info("Removing pronouns for {}", player.getStringifiedName());
+
+        if (!playerPronouns.containsKey(player.getUuid())) return;
+        playerPronouns.remove(player.getUuid());
+
+        String teamName = PronounsPlease.MOD_ID + "_" + player.getUuid();
+        Scoreboard tempScoreboard = new Scoreboard();
+        Team tempTeam = tempScoreboard.addTeam(teamName);
+        server.getPlayerManager().sendToAll(TeamS2CPacket.updateRemovedTeam(tempTeam));
     }
 
     /**
-     * Requests an update for a client to sync all present pronouns for other players.
-     * Usually called when a new client connects to the server.
+     * Syncs all present pronouns to a newly joined player, translated into their language.
      *
-     * @param player the newly joined player to sync to
+     * @param recipient the newly joined player to sync to
+     * @param server    the minecraft server instance
      */
-    public static void syncToPlayer(ServerPlayerEntity player) {
-        for (Team team : virtualTeams.values()) {
-            player.networkHandler.sendPacket(TeamS2CPacket.updateTeam(team, true));
+    public static void syncToPlayer(ServerPlayerEntity recipient, MinecraftServer server) {
+        PronounsPlease.LOGGER.info("Syncing virtual teams to player {}", recipient.getStringifiedName());
+
+        for (Map.Entry<UUID, String> entry : playerPronouns.entrySet()) {
+            ServerPlayerEntity target = server.getPlayerManager().getPlayer(entry.getKey());
+            if (target != null) {
+                sendTeamPacket(target, entry.getValue(), recipient, true);
+            }
         }
     }
 
     /**
-     * Gets the pronouns registered for a player, if present, or null.
+     * Sends a team packet to a specific recipient with pronouns translated into their language.
+     * A temporary scoreboard is used per-send to avoid mutating a shared team object, which
+     * would cause all recipients to see the last translation written.
+     */
+    private static void sendTeamPacket(ServerPlayerEntity target, String pronounsKey, ServerPlayerEntity recipient, boolean withMembers) {
+        String language = recipient.getClientOptions().language();
+        String translated = PronounsTranslationManager.INSTANCE.translate(language, pronounsKey);
+
+        // Create a temporary team just for this packet; we don't want to mutate an existing one
+        // people with potentially other locales are using
+        String teamName = PronounsPlease.MOD_ID + "_" + target.getUuid();
+        Scoreboard tempScoreboard = new Scoreboard();
+        Team tempTeam = tempScoreboard.addTeam(teamName);
+        tempTeam.getPlayerList().add(target.getStringifiedName());
+        tempTeam.setSuffix(Text.literal(" [" + translated + "]").formatted(Formatting.GRAY));
+
+        recipient.networkHandler.sendPacket(TeamS2CPacket.updateTeam(tempTeam, withMembers));
+    }
+
+    /**
+     * Gets the pronouns key registered for a player, if present.
      */
     public static Optional<String> getPronouns(UUID uuid) {
-        Team team = virtualTeams.get(uuid);
-        if (team == null) return Optional.empty();
-
-        // Pronouns are wrapped in square brackets, extract it
-        String suffix = team.getSuffix().getString();
-        if (suffix.startsWith(" [") && suffix.endsWith("]")) {
-            return Optional.of(suffix.substring(2, suffix.length() - 1));
-        }
-        return Optional.empty();
+        return Optional.ofNullable(playerPronouns.get(uuid));
     }
 
     /**
      * Returns whether a player currently has pronouns set.
      */
     public static boolean hasPronouns(UUID uuid) {
-        return virtualTeams.containsKey(uuid);
+        return playerPronouns.containsKey(uuid);
     }
 }
