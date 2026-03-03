@@ -14,7 +14,7 @@ repositories { mavenCentral() }
 
 loom {
 	mods {
-		"pronounsplus" {
+		"pronounspls" {
 			sourceSet sourceSets.main
 		}
 	}

@@ -1,4 +1,4 @@
-package xyz.devcomp.pronounsplus;
+package xyz.devcomp.pronounspls;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -39,7 +39,7 @@ public class PronounsTeamManager {
         removePronouns(player, server);
 
         // Create a team and add player to it
-        String teamName = PronounsPlus.MOD_ID + "_" + uuid.toString();
+        String teamName = PronounsPlease.MOD_ID + "_" + uuid.toString();
         Team team = FAKE_SCOREBOARD.addTeam(teamName);
         team.setSuffix(Text.literal(" [" + pronouns + "]").formatted(Formatting.GRAY));
 

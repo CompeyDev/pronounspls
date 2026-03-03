@@ -1,4 +1,4 @@
-package xyz.devcomp.pronounsplus;
+package xyz.devcomp.pronounspls;
 
 import java.util.EnumSet;
 import java.util.List;
@@ -22,13 +22,13 @@ import net.fabricmc.fabric.api.networking.v1.ServerPlayConnectionEvents;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-public class PronounsPlus implements DedicatedServerModInitializer {
-	public static final Logger LOGGER = LoggerFactory.getLogger("Pronouns+");
+public class PronounsPlease implements DedicatedServerModInitializer {
+	public static final Logger LOGGER = LoggerFactory.getLogger("PronounsPlease");
 	public static final FabricLoader LOADER = FabricLoader.getInstance();
 
 	public static MinecraftServer server;
 
-    public static final String MOD_ID = "pronounsplus";
+    public static final String MOD_ID = "pronounspls";
     public static final Identifier PRONOUNS_MESSAGE_TYPE_ID = Identifier.of(MOD_ID, "chat_pronouns_format");
 
 	@Override

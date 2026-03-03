@@ -1,9 +1,9 @@
 {
 	"schemaVersion": 1,
-	"id": "pronounsplus",
+	"id": "pronounspls",
 	"version": "${version}",
-	"name": "Pronouns+",
-	"description": "Server-side fabric mod that allows players to display their preferred pronouns!",
+	"name": "Pronouns, Please!",
+	"description": "Server-side fabric mod that allows players to display their preferred pronouns",
 	"authors": [
 		{
 			"name": "DevComp",
@@ -15,20 +15,20 @@
 	],
 	"contributors": [],
 	"contact": {
-		"homepage": "https://modrinth.com/mod/pronounsplus",
-		"sources": "https://github.com/CompeyDev/pronounsplus",
-		"issues": "https://github.com/CompeyDev/pronounsplus/issues"
+		"homepage": "https://modrinth.com/mod/pronounspls",
+		"sources": "https://github.com/CompeyDev/pronouns-please",
+		"issues": "https://github.com/CompeyDev/pronouns-please/issues"
 	},
 	"license": "LGPL-3.0",
-	"icon": "assets/pronounsplus/icon.png",
+	"icon": "assets/pronounspls/icon.png",
 	"environment": "server",
 	"entrypoints": {
 		"server": [
-			"xyz.devcomp.pronounsplus.PronounsPlus"
+			"xyz.devcomp.pronounspls.PronounsPlease"
 		]
 	},
 	"mixins": [
-		"pronounsplus.mixins.json"
+    "pronounspls.mixins.json"
 	],
 	"depends": {
 		"java": "${java_version}",

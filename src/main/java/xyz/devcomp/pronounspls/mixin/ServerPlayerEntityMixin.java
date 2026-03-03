@@ -1,8 +1,8 @@
-package xyz.devcomp.pronounsplus.mixin;
+package xyz.devcomp.pronounspls.mixin;
 
 import java.util.Optional;
 
-import xyz.devcomp.pronounsplus.PronounsPlus;
+import xyz.devcomp.pronounspls.PronounsPlease;
 
 import net.minecraft.util.Identifier;
 import net.minecraft.text.Text;
@@ -47,7 +47,7 @@ public class ServerPlayerEntityMixin {
             switch (messageTypeId.toString()) {
                 case "minecraft:msg_command_outgoing", "minecraft:team_msg_command_outgoing" -> {
                     // Message includes a target; must be an outgoing whisper or similar, so we use the regular type
-                    PronounsPlus.LOGGER.debug("Whisper detected: {}, {}", params.targetName(), params.type().getIdAsString());
+                    PronounsPlease.LOGGER.debug("Whisper detected: {}, {}", params.targetName(), params.type().getIdAsString());
                     Text nameWithPronouns = MutableText.of(params.name().getContent())
                             .append(Text.literal(" (they/them)")
                             .formatted(Formatting.ITALIC));
@@ -61,7 +61,7 @@ public class ServerPlayerEntityMixin {
                     RegistryEntry<MessageType> messageType = player
                             .getRegistryManager()
                             .getOrThrow(RegistryKeys.MESSAGE_TYPE)
-                            .getEntry(PronounsPlus.PRONOUNS_MESSAGE_TYPE_ID)
+                            .getEntry(PronounsPlease.PRONOUNS_MESSAGE_TYPE_ID)
                             .orElseThrow();
 
                     return new MessageType.Parameters(messageType, params.name(), Optional.of(Text.literal("they/them").formatted(Formatting.DARK_PURPLE)));
