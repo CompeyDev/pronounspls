@@ -43,7 +43,7 @@ public class PronounsPlease implements DedicatedServerModInitializer {
 
 	@Override
 	public void onInitializeServer() {
-		LOGGER.info("Hello, pronouns!");
+		LOGGER.info("May I know your pronouns, please?");
 
         // Register translations lookup resource loader
         ResourceLoader
@@ -66,11 +66,7 @@ public class PronounsPlease implements DedicatedServerModInitializer {
             });
         });
 
-        // For nametags and virtual team management
-        ServerPlayConnectionEvents.JOIN.register(((handler, _sender, s) -> {
-//            PronounsTeamManager.setPronouns(handler.player, "pronounspls.pronouns.any", s);
-//            PronounsTeamManager.syncToPlayer(handler.player, s);
-        }));
+        // Virtual team cleanup
         ServerPlayConnectionEvents.DISCONNECT.register(((handler, s) -> PronounsTeamManager.removePronouns(handler.player, s)));
 
         // Commands!
