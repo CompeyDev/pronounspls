@@ -81,25 +81,39 @@ public class PronounsTeamManager {
      * would cause all recipients to see the last translation written.
      */
     private static void sendTeamPacket(ServerPlayerEntity target, String pronounsKey, ServerPlayerEntity recipient, boolean withMembers) {
-        String language = recipient.getClientOptions().language();
-        String translated = PronounsTranslationManager.INSTANCE.translate(language, pronounsKey);
-
         // Create a temporary team just for this packet; we don't want to mutate an existing one
         // people with potentially other locales are using
         String teamName = PronounsPlease.MOD_ID + "_" + target.getUuid();
         Scoreboard tempScoreboard = new Scoreboard();
         Team tempTeam = tempScoreboard.addTeam(teamName);
+
         tempTeam.getPlayerList().add(target.getStringifiedName());
-        tempTeam.setSuffix(Text.literal(" [" + translated + "]").formatted(Formatting.GRAY));
+        tempTeam.setPrefix(getFormattedPronounsText(recipient, pronounsKey));
 
         recipient.networkHandler.sendPacket(TeamS2CPacket.updateTeam(tempTeam, withMembers));
+    }
+
+    public static Text getFormattedPronounsText(ServerPlayerEntity player, String pronounsKey) {
+        String preferredPronoun = PronounsTranslationManager
+            .INSTANCE
+            .translate(player, pronounsKey);
+
+        return Text.literal("[" + preferredPronoun + "] ").formatted(Formatting.GRAY);
     }
 
     /**
      * Gets the pronouns key registered for a player, if present.
      */
-    public static Optional<String> getPronouns(UUID uuid) {
-        return Optional.ofNullable(playerPronouns.get(uuid));
+    public static Optional<String> getPronounsKey(ServerPlayerEntity player) {
+        return Optional.ofNullable(playerPronouns.get(player.getUuid()));
+    }
+
+    /**
+     * Gets the pronouns registered for a player in their language, if present.
+     */
+    public static Optional<String> getPronouns(ServerPlayerEntity player) {
+        return getPronounsKey(player)
+            .map(key -> PronounsTranslationManager.INSTANCE.translate(player, key));
     }
 
     /**

@@ -3,7 +3,9 @@
 	"package": "xyz.devcomp.pronounspls.mixin",
 	"compatibilityLevel": "JAVA_17",
 	"mixins": [
-      "ServerPlayerEntityMixin"
+      "ServerPlayerEntityMixin",
+      "PlayerManagerMixin",
+      "accessor.PlayerListS2CPacketAccessor"
     ],
 	"injectors": {
 		"defaultRequire": 1

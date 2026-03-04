@@ -30,6 +30,7 @@
 	"mixins": [
     "pronounspls.mixins.json"
 	],
+  "accessWidener": "pronounspls.accesswidener",
 	"depends": {
 		"java": "${java_version}",
 		"minecraft": "${minecraft_version}",

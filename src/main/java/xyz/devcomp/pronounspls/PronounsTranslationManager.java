@@ -5,8 +5,10 @@ import java.io.InputStreamReader;
 import java.util.HashMap;
 import java.util.Map;
 
+import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.resource.ResourceManager;
 import net.minecraft.resource.SynchronousResourceReloader;
+import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.util.Identifier;
 
 import com.google.gson.JsonObject;
@@ -87,5 +89,21 @@ public class PronounsTranslationManager implements SynchronousResourceReloader {
             .getOrDefault(key, translations
                 .getOrDefault(DEFAULT_LOCALE, Map.of())
                 .getOrDefault(key, key));
+    }
+
+    /**
+     * Translates a key into the player's preferred language.
+     *
+     * <p>Falls back to {@value DEFAULT_LOCALE} if the key is not found in the requested
+     * language, and falls back to the raw key itself if not found in the default locale
+     * either.
+     *
+     * @param player    the player whose locale it should be translated to
+     * @param key       the translation key to look up
+     * @return the translated string
+     */
+    public String translate(ServerPlayerEntity player, String key) {
+        String language = player.getClientOptions().language();
+        return this.translate(language, key);
     }
 }

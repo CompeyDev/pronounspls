@@ -3,10 +3,13 @@ package xyz.devcomp.pronounspls;
 import java.util.EnumSet;
 import java.util.List;
 
-import net.fabricmc.fabric.api.resource.ResourceManagerHelper;
-import net.fabricmc.fabric.api.resource.v1.ResourceLoader;
+import net.minecraft.util.Formatting;
+import xyz.devcomp.pronounspls.mixin.accessor.PlayerListS2CPacketAccessor;
+
+import net.minecraft.entity.player.PlayerModelPart;
 import net.minecraft.resource.ResourceType;
 import net.minecraft.text.Text;
+import net.minecraft.util.Nullables;
 import net.minecraft.util.Identifier;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.network.ServerPlayerEntity;
@@ -16,12 +19,15 @@ import net.minecraft.text.Decoration;
 import net.minecraft.text.Style;
 import net.minecraft.network.packet.s2c.play.PlayerListS2CPacket;
 import net.minecraft.network.message.MessageType;
+import net.minecraft.network.encryption.PublicPlayerSession;
 
 import net.fabricmc.loader.api.FabricLoader;
 import net.fabricmc.api.DedicatedServerModInitializer;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
 import net.fabricmc.fabric.api.event.registry.DynamicRegistrySetupCallback;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayConnectionEvents;
+import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback;
+import net.fabricmc.fabric.api.resource.v1.ResourceLoader;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -34,12 +40,6 @@ public class PronounsPlease implements DedicatedServerModInitializer {
 
     public static final String MOD_ID = "pronounspls";
     public static final Identifier PRONOUNS_MESSAGE_TYPE_ID = Identifier.of(MOD_ID, "chat_pronouns_format");
-
-    private final Text ANY_PRONOUNS = Text.literal(
-        PronounsTranslationManager
-            .INSTANCE
-            .translate("en_us", "pronounspls.pronouns.any")
-    );
 
 	@Override
 	public void onInitializeServer() {
@@ -58,7 +58,7 @@ public class PronounsPlease implements DedicatedServerModInitializer {
                     // instead of providing a translation key, we provide the literal formatting string which
                     // clients usually fallback to
 
-                    // TODO: We need to actually do translations for pronouns, and allow format configuration
+                    // TODO: Allow format configuration maybe?
 
                     new Decoration("%1$s | <%2$s>: %3$s", List.of(Decoration.Parameter.TARGET, Decoration.Parameter.SENDER, Decoration.Parameter.CONTENT), Style.EMPTY),
                     Decoration.ofChat("chat.type.text.narrate") // default narration, unaffected by pronouns
@@ -68,24 +68,56 @@ public class PronounsPlease implements DedicatedServerModInitializer {
 
         // For nametags and virtual team management
         ServerPlayConnectionEvents.JOIN.register(((handler, _sender, s) -> {
-            PronounsTeamManager.setPronouns(handler.player, "pronounspls.pronouns.any", s);
-            PronounsTeamManager.syncToPlayer(handler.player, s);
+//            PronounsTeamManager.setPronouns(handler.player, "pronounspls.pronouns.any", s);
+//            PronounsTeamManager.syncToPlayer(handler.player, s);
         }));
-        ServerPlayConnectionEvents.DISCONNECT.register(((handler, s) -> PronounsTeamManager.removePronouns(handler.player , s)));
+        ServerPlayConnectionEvents.DISCONNECT.register(((handler, s) -> PronounsTeamManager.removePronouns(handler.player, s)));
+
+        // Commands!
+        CommandRegistrationCallback.EVENT.register(PronounsCommandManager::register);
+
+        // TODO: Save custom pronouns to disk, or fetch from pronoundb
     }
 
     /**
-     * Syncs the player list entry for a specific player for all clients. Typically
-     * called once the pronouns are updated for a player.
+     * Syncs the player list entry for a specific player for all clients, respecting
+     * their set language. Typically called once the pronouns are updated for a player.
      *
      * @param player the player to update the player list for
      */
     public static void refreshPlayerList(ServerPlayerEntity player) {
-        PlayerListS2CPacket packet = new PlayerListS2CPacket(
+        for (ServerPlayerEntity recipient : server.getPlayerManager().getPlayerList()) {
+            String translated = PronounsTranslationManager.INSTANCE.translate(
+                recipient,
+                PronounsTeamManager
+                    .getPronounsKey(player)
+                    .orElse("pronounspls.pronouns.they") // FIXME: do not default to they/them
+            );
+
+            Text nameWithPronouns = PronounsTeamManager.getFormattedPronounsText(recipient, translated)
+                .copy()
+                .append(player.getName().copy().formatted(Formatting.WHITE));
+
+            // Build a fake entry with the translated name and gaslight each client
+            PlayerListS2CPacket.Entry entry = new PlayerListS2CPacket.Entry(
+                player.getUuid(),
+                player.getGameProfile(),
+                true,
+                player.networkHandler.getLatency(),
+                player.getGameMode(),
+                nameWithPronouns,
+                player.isModelPartVisible(PlayerModelPart.HAT),
+                player.getPlayerListOrder(),
+                Nullables.map(player.getSession(), PublicPlayerSession::toSerialized)
+            );
+
+            PlayerListS2CPacket packet = new PlayerListS2CPacket(
                 EnumSet.of(PlayerListS2CPacket.Action.UPDATE_DISPLAY_NAME),
                 List.of(player)
-        );
+            );
 
-        server.getPlayerManager().sendToAll(packet);
+            ((PlayerListS2CPacketAccessor) packet).setEntries(List.of(entry));
+            recipient.networkHandler.sendPacket(packet);
+        }
     }
 }
