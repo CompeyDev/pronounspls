@@ -46,7 +46,7 @@ public class PronounsPlease implements DedicatedServerModInitializer {
     public static final Duration PRONOUNS_REFRESH_DURATION = Duration.ofHours(1);
 
     public static MinecraftServer server;
-    @Nullable  public static PronounDBClient pronoundb;
+    @Nullable public static PronounDBClient pronoundb;
 
 	@Override
 	public void onInitializeServer() {
