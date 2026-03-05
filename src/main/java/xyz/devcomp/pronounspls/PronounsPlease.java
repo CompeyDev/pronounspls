@@ -1,14 +1,17 @@
 package xyz.devcomp.pronounspls;
 
+import java.lang.ref.WeakReference;
+import java.time.Duration;
 import java.util.EnumSet;
 import java.util.List;
 
-import net.minecraft.util.Formatting;
+import xyz.devcomp.pronounspls.api.PronounDBClient;
 import xyz.devcomp.pronounspls.mixin.accessor.PlayerListS2CPacketAccessor;
 
 import net.minecraft.entity.player.PlayerModelPart;
 import net.minecraft.resource.ResourceType;
 import net.minecraft.text.Text;
+import net.minecraft.util.Formatting;
 import net.minecraft.util.Nullables;
 import net.minecraft.util.Identifier;
 import net.minecraft.server.MinecraftServer;
@@ -32,14 +35,18 @@ import net.fabricmc.fabric.api.resource.v1.ResourceLoader;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import org.jetbrains.annotations.Nullable;
+
 public class PronounsPlease implements DedicatedServerModInitializer {
 	public static final Logger LOGGER = LoggerFactory.getLogger("PronounsPlease");
 	public static final FabricLoader LOADER = FabricLoader.getInstance();
 
-	public static MinecraftServer server;
-
     public static final String MOD_ID = "pronounspls";
     public static final Identifier PRONOUNS_MESSAGE_TYPE_ID = Identifier.of(MOD_ID, "chat_pronouns_format");
+    public static final Duration PRONOUNS_REFRESH_DURATION = Duration.ofHours(1);
+
+    public static MinecraftServer server;
+    @Nullable  public static PronounDBClient pronoundb;
 
 	@Override
 	public void onInitializeServer() {
@@ -50,7 +57,18 @@ public class PronounsPlease implements DedicatedServerModInitializer {
             .get(ResourceType.SERVER_DATA)
             .registerReloader(PronounsTranslationManager.getFabricId(), PronounsTranslationManager.INSTANCE);
 
-        ServerLifecycleEvents.SERVER_STARTED.register(s -> server = s);
+        ServerLifecycleEvents.SERVER_STARTED.register(s -> {
+            if (!s.isOnlineMode()) {
+                LOGGER.warn("PronounDB integration does not work for offline mode servers!");
+            }
+
+            server = s;
+            pronoundb = PronounDBClient.builder()
+                .logger(LOGGER)
+                .withCache(PRONOUNS_REFRESH_DURATION, s.getMaxPlayerCount())
+                .build();
+        });
+
         DynamicRegistrySetupCallback.EVENT.register(registryView -> {
             registryView.getOptional(RegistryKeys.MESSAGE_TYPE).ifPresent(registry -> {
                 Registry.register(registry, PRONOUNS_MESSAGE_TYPE_ID, new MessageType(
@@ -66,8 +84,26 @@ public class PronounsPlease implements DedicatedServerModInitializer {
             });
         });
 
-        // Virtual team cleanup
+        // Virtual teams initialization and cleanup
         ServerPlayConnectionEvents.DISCONNECT.register(((handler, s) -> PronounsTeamManager.removePronouns(handler.player, s)));
+        ServerPlayConnectionEvents.JOIN.register((handler, _packetSender, s) -> {
+            if (pronoundb != null) {
+                // NOTE: For now, we use only the first pronoun. We need to consider how we should represent
+                // things such as she/they
+                pronoundb.lookupAsync(PronounDBClient.Platform.MINECRAFT, handler.player.getUuid().toString())
+                    .thenAccept(pronouns -> pronouns
+                        .ifPresent(p -> {
+                            server.execute(() -> {
+                                PronounsTeamManager.setPronouns(handler.player, new PronounsSource.PronounDB(new WeakReference<>(p)), server);
+                                PronounsTeamManager.syncToPlayer(handler.player, s);
+                            });
+                        }))
+                    .exceptionally(e -> {
+                        LOGGER.error("Failed to look up pronouns for {} on PronounDB", handler.player.getStringifiedName(), e);
+                        return null;
+                    });
+            }
+        });
 
         // Commands!
         CommandRegistrationCallback.EVENT.register(PronounsCommandManager::register);

@@ -8,7 +8,6 @@ import net.minecraft.network.ClientConnection;
 import net.minecraft.network.message.MessageType;
 import net.minecraft.network.message.SentMessage;
 import net.minecraft.network.packet.Packet;
-import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.PlayerManager;
 import net.minecraft.server.network.ConnectedClientData;
 import net.minecraft.server.network.ServerPlayerEntity;
@@ -34,15 +33,10 @@ public class PlayerManagerMixin {
         )
     )
     private void redirectPlayerListBroadcast(PlayerManager instance, Packet<?> packet, ClientConnection connection, ServerPlayerEntity player, ConnectedClientData clientData) {
-        // Offload player list refreshing to our own implementation and cancel the vanilla one
-        MinecraftServer server = instance.getServer();
+        // TODO: Offload player list refreshing to our own implementation and cancel the vanilla one.
+        //       We do not use our own player list packets and rely on team suffixes for now, but we
+        //       should for more customizability, see `PronounsPlease.refreshPlayerList`
         instance.sendToAll(packet);
-
-//        PronounsTeamManager.setPronouns(player, "pronounspls.pronouns.any", server);
-        PronounsTeamManager.syncToPlayer(player, server);
-
-        // TODO: We do not use our own player list packets and rely on team suffixes for now, but we should
-        // for more customizability, see `PronounsPlease.refreshPlayerList`
     }
 
 
