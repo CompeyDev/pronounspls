@@ -36,8 +36,8 @@ public class PronounsCommandManager {
     public static final List<PronounsCommand> SUBCOMMANDS = List.of(
         new HelpCommand(),
         new SetPronounsCommand(),
-        new GetPronounsCommand()
-        // TODO: force update / sync command (for pronoundb integration)
+        new GetPronounsCommand(),
+        new RefreshPronounsCommand()
     );
 
     public static void register(CommandDispatcher<ServerCommandSource> dispatcher, CommandRegistryAccess _registryAccess, CommandManager.RegistrationEnvironment _environment) {
