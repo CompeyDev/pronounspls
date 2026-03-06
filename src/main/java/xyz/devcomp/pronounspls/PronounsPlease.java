@@ -60,6 +60,7 @@ public class PronounsPlease implements DedicatedServerModInitializer {
         ServerLifecycleEvents.SERVER_STARTED.register(s -> {
             if (!s.isOnlineMode()) {
                 LOGGER.warn("PronounDB integration does not work for offline mode servers!");
+                return;
             }
 
             server = s;
@@ -99,7 +100,7 @@ public class PronounsPlease implements DedicatedServerModInitializer {
             if (pronoundb != null) {
                 // NOTE: For now, we use only the first pronoun. We need to consider how we should represent
                 // things such as she/they
-                pronoundb.lookupAsync(PronounDBClient.Platform.MINECRAFT, handler.player.getUuid().toString())
+                pronoundb.lookupAsync(PronounDBClient.Platform.MINECRAFT, handler.player.getUuidAsString())
                     .thenAccept(pronouns -> pronouns
                         .ifPresent(p -> {
                             server.execute(() -> {
@@ -135,9 +136,10 @@ public class PronounsPlease implements DedicatedServerModInitializer {
                     .orElse("pronounspls.pronouns.they") // FIXME: do not default to they/them
             );
 
-            Text nameWithPronouns = PronounsTeamManager.getFormattedPronounsText(recipient, translated)
-                .copy()
-                .append(player.getName().copy().formatted(Formatting.WHITE));
+
+            Text nameWithPronouns = Text.literal("[" + translated + "] ")
+                .formatted(Formatting.GRAY)
+                .append(player.getName().copy().formatted(Formatting.WHITE));;
 
             // Build a fake entry with the translated name and gaslight each client
             PlayerListS2CPacket.Entry entry = new PlayerListS2CPacket.Entry(
