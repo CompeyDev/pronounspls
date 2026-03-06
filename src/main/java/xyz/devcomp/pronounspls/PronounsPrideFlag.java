@@ -2,7 +2,6 @@ package xyz.devcomp.pronounspls;
 
 import java.util.Optional;
 
-import net.minecraft.util.Formatting;
 import xyz.devcomp.pronounspls.api.Decoration;
 
 import net.minecraft.text.MutableText;
