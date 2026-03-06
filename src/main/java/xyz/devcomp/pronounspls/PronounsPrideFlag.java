@@ -20,6 +20,14 @@ public enum PronounsPrideFlag {
         this.colors = colors;
     }
 
+    /**
+     * Creates a {@code PronounsPrideFlag} from a {@code Decoration} returned by the PronounDB
+     * client.
+     *
+     * @param decoration the decoration returned by the API
+     * @return the constructed pride flag or {@code Optional.empty()} if the decoration was not a
+     *         pride flag variant
+     */
     public static Optional<PronounsPrideFlag> fromDecoration(Decoration decoration) {
         if (!decoration.isPride())
             return Optional.empty();
@@ -34,6 +42,12 @@ public enum PronounsPrideFlag {
         });
     }
 
+    /**
+     * Applies the pride flag's formatting to an arbitrary length string to the best accuracy
+     * possible.
+     * @param text text to add the formatting to
+     * @return the formatted text component
+     */
     public Text apply(String text) {
         MutableText result = Text.empty();
 
