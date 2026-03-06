@@ -10,8 +10,12 @@ import net.minecraft.scoreboard.Scoreboard;
 import net.minecraft.scoreboard.Team;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.network.ServerPlayerEntity;
+import net.minecraft.text.Decoration;
+import net.minecraft.text.MutableText;
 import net.minecraft.text.Text;
 import net.minecraft.util.Formatting;
+
+import org.jetbrains.annotations.Nullable;
 
 /**
  * Manages virtual scoreboard teams for displaying pronouns above player heads.
@@ -38,7 +42,7 @@ public class PronounsTeamManager {
         playerPronouns.put(player.getUuid(), source);
 
         for (ServerPlayerEntity recipient : server.getPlayerManager().getPlayerList()) {
-            sendTeamPacket(player, pronounsKey.get(), recipient, true);
+            sendTeamPacket(player, pronounsKey.get(), resolveFlag(source).orElse(null), recipient, true);
         }
     }
 
@@ -73,7 +77,7 @@ public class PronounsTeamManager {
             resolveKey(entry.getValue()).ifPresent(key -> {
                 ServerPlayerEntity target = server.getPlayerManager().getPlayer(entry.getKey());
                 if (target != null) {
-                    sendTeamPacket(target, key, recipient, true);
+                    sendTeamPacket(target, key, resolveFlag(entry.getValue()).orElse(null), recipient, true);
                 }
             });
         }
@@ -84,37 +88,58 @@ public class PronounsTeamManager {
      * A temporary scoreboard is used per-send to avoid mutating a shared team object, which
      * would cause all recipients to see the last translation written.
      */
-    private static void sendTeamPacket(ServerPlayerEntity target, String pronounsKey, ServerPlayerEntity recipient, boolean withMembers) {
+    private static void sendTeamPacket(
+        ServerPlayerEntity target,
+        String pronounsKey,
+        @Nullable PronounsPrideFlag prideFlag,
+        ServerPlayerEntity recipient,
+        boolean withMembers
+    ) {
         String teamName = PronounsPlease.MOD_ID + "_" + target.getUuid();
         Scoreboard tempScoreboard = new Scoreboard();
         Team tempTeam = tempScoreboard.addTeam(teamName);
 
+        String translated = PronounsTranslationManager
+            .INSTANCE
+            .translate(recipient, pronounsKey);
+
+        // TODO: make pride flag application optional and configurable
+        Text prefix = prideFlag != null ? prideFlag.apply(translated) : Text.literal(translated).formatted(Formatting.GRAY);
+        // MutableText separator = Text.literal("  ").styled(s -> s.withObfuscated(true).withColor(Formatting.BOLD));
+
         tempTeam.getPlayerList().add(target.getStringifiedName());
-        tempTeam.setPrefix(getFormattedPronounsText(recipient, pronounsKey));
+        tempTeam.setPrefix(Text.literal("[").append(prefix).append("] "));
 
         recipient.networkHandler.sendPacket(TeamS2CPacket.updateTeam(tempTeam, withMembers));
     }
 
-    public static Text getFormattedPronounsText(ServerPlayerEntity player, String pronounsKey) {
-        String preferredPronoun = PronounsTranslationManager
-            .INSTANCE
-            .translate(player, pronounsKey);
-
-        return Text.literal("[" + preferredPronoun + "] ").formatted(Formatting.GRAY);
+    /**
+     * Gets the decoration if the source of the pronouns is PronounDB and one is equipped by the user.
+     */
+    public static Optional<PronounsPrideFlag> getPrideFlag(UUID player) {
+        return Optional.ofNullable(playerPronouns.get(player))
+            .flatMap(PronounsTeamManager::resolveFlag);
     }
 
     /**
-     * Gets the pronouns key registered for a player, if present and still alive.
+     * Gets the translation key for the pronouns registered for a player UUID, if present and still alive.
+     */
+    public static Optional<String> getPronounsKey(UUID player) {
+        return Optional.ofNullable(playerPronouns.get(player))
+            .flatMap(PronounsTeamManager::resolveKey);
+    }
+
+    /**
+     * Gets the pronouns key registered for a player entity, if present and still alive.
      */
     public static Optional<String> getPronounsKey(ServerPlayerEntity player) {
-        return Optional.ofNullable(playerPronouns.get(player.getUuid()))
-            .flatMap(PronounsTeamManager::resolveKey);
+        return getPronounsKey(player.getUuid());
     }
 
     /**
      * Gets the pronouns registered for a player in their language, if present and still alive.
      */
-    public static Optional<String> getPronouns(ServerPlayerEntity player) {
+    public static Optional<String> getTranslatedPronouns(ServerPlayerEntity player) {
         return getPronounsKey(player)
             .map(key -> PronounsTranslationManager.INSTANCE.translate(player, key));
     }
@@ -134,5 +159,11 @@ public class PronounsTeamManager {
             case PronounsSource.Custom c -> Optional.of(c.pronounsKey());
             case PronounsSource.PronounDB p -> p.resolve();
         };
+    }
+
+    private static Optional<PronounsPrideFlag> resolveFlag(PronounsSource source) {
+        return source instanceof PronounsSource.PronounDB s
+            ? s.getDecoration().flatMap(PronounsPrideFlag::fromDecoration)
+            : Optional.empty();
     }
 }

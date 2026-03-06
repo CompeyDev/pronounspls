@@ -1,8 +1,11 @@
 package xyz.devcomp.pronounspls.mixin;
 
 import java.util.Optional;
+import java.util.UUID;
 
 import xyz.devcomp.pronounspls.PronounsPlease;
+import xyz.devcomp.pronounspls.PronounsPrideFlag;
+import xyz.devcomp.pronounspls.PronounsTeamManager;
 import xyz.devcomp.pronounspls.PronounsTranslationManager;
 
 import net.minecraft.util.Identifier;
@@ -37,12 +40,22 @@ public class ServerPlayerEntityMixin {
             ServerPlayerEntity recipient = (ServerPlayerEntity) (Object) this;
             String language = recipient.getClientOptions().language();
 
-            // Extract pronoun key from targetName carrier set by `PlayerManagerMixin`
-            String pronounKey = params.targetName().map(Text::getString).orElse(null);
-            if (pronounKey == null) return params;
+            // Extract the sender's UUID from targetName carrier set by `PlayerManagerMixin`
+            UUID senderUuid = params.targetName()
+                .map(Text::getString)
+                .map(UUID::fromString)
+                .orElse(null);
 
-            String translated = PronounsTranslationManager.INSTANCE.translate(language, pronounKey);
-            Text pronounText = Text.literal(translated).formatted(Formatting.DARK_AQUA);
+            if (senderUuid == null) return params;
+
+            String pronounsKey = PronounsTeamManager.getPronounsKey(senderUuid).orElse(null);
+            PronounsPrideFlag prideFlag = PronounsTeamManager.getPrideFlag(senderUuid).orElse(null);
+
+            if (pronounsKey == null)
+                return params;
+
+            String translated = PronounsTranslationManager.INSTANCE.translate(language, pronounsKey);
+            Text pronounText = prideFlag != null ? prideFlag.apply(translated) : Text.literal(translated).formatted(Formatting.GRAY);
 
             switch (messageTypeId.toString()) {
                 case "minecraft:msg_command_outgoing", "minecraft:team_msg_command_outgoing" -> {

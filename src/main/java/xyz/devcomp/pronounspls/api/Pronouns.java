@@ -1,5 +1,7 @@
 package xyz.devcomp.pronounspls.api;
 
+import org.jetbrains.annotations.Nullable;
+
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -9,8 +11,7 @@ import java.util.stream.Collectors;
  * Possible values: "he", "she", "it", "they", "any", "ask", "avoid".
  * Users may have multiple, e.g. ["she", "they"].
  */
-public record Pronouns(List<String> sets) {
-
+public record Pronouns(List<String> sets, @Nullable Decoration decoration) {
     /** Returns true if the user has asked not to be referred to (avoid). */
     public boolean isAvoid() {
         return sets.contains("avoid");

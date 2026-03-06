@@ -32,8 +32,8 @@ public class RefreshPronounsCommand implements PronounsCommandManager.PronounsCo
                     return 1;
                 }
 
-                PronounsPlease.pronoundb.invalidate(PronounDBClient.Platform.MINECRAFT, player.getUuid().toString());
-                PronounsPlease.pronoundb.lookupAsync(PronounDBClient.Platform.MINECRAFT, player.getUuid().toString())
+                PronounsPlease.pronoundb.invalidate(PronounDBClient.Platform.MINECRAFT, player.getUuidAsString());
+                PronounsPlease.pronoundb.lookupAsync(PronounDBClient.Platform.MINECRAFT, player.getUuidAsString())
                     .thenAccept(pronouns -> server.execute(() -> {
                         if (pronouns.isEmpty()) {
                             PronounsTeamManager.removePronouns(player, server);

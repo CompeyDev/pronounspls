@@ -60,17 +60,11 @@ public class PlayerManagerMixin {
             return;
         }
 
-        String pronounKey = PronounsTeamManager.getPronounsKey(sender).orElse(null);
-        if (pronounKey == null) {
-            original.call(recipient, sentMessage, filterMaskEnabled, params);
-            return;
-        }
-
-        // Embed pronoun key into targetName as a carrier
+        // Embed sender UUID into targetName as a carrier
         MessageType.Parameters newParams = new MessageType.Parameters(
             params.type(),
             params.name(),
-            Optional.of(Text.literal(pronounKey))
+            Optional.of(Text.literal(sender.getUuidAsString()))
         );
 
         original.call(recipient, sentMessage, filterMaskEnabled, newParams);

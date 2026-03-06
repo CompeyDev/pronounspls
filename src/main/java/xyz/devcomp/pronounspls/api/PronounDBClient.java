@@ -14,7 +14,6 @@ import java.util.concurrent.*;
 import com.google.gson.*;
 import org.jetbrains.annotations.Nullable;
 import org.slf4j.Logger;
-import xyz.devcomp.pronounspls.PronounsPlease;
 
 /**
  * Client for the PronounDB API (V2).
@@ -134,7 +133,7 @@ public class PronounDBClient {
      *
      * @param platform  the platform to query the user from
      * @param userId    the user ID on the platform
-     * @return user's pronouns or empty if pronouns are unset
+     * @return user's pronouns (including decoration if set) or empty if pronouns are unset
      */
     public Optional<Pronouns> lookup(Platform platform, String userId) throws PronounDBException {
         String cacheKey = hash(platform, userId);
@@ -159,7 +158,6 @@ public class PronounDBClient {
             pronouns.map(Pronouns::toHumanReadable).orElse("<null>"),
             userId, platform
         );
-
 
         if (cachingEnabled && pronouns.isPresent()) {
             cache.put(cacheKey, new CacheEntry<>(pronouns.get(), Instant.now().plus(cacheTtl)));
@@ -317,7 +315,19 @@ public class PronounDBClient {
             .orElse(null);
 
         if (userObj == null) return null;
+        return parseUserObject(userObj);
+    }
 
+    private Map<String, Pronouns> parseBulkResponse(JsonObject body) {
+        Map<String, Pronouns> result = new HashMap<>();
+        for (Map.Entry<String, JsonElement> entry : body.entrySet()) {
+            Pronouns pronouns = parseUserObject(entry.getValue().getAsJsonObject());
+            if (pronouns != null) result.put(entry.getKey(), pronouns);
+        }
+        return result;
+    }
+
+    private Pronouns parseUserObject(JsonObject userObj) {
         JsonObject sets = userObj.getAsJsonObject("sets");
         if (sets == null) return null;
 
@@ -326,21 +336,13 @@ public class PronounDBClient {
 
         List<String> pronounSets = new ArrayList<>();
         arr.forEach(e -> pronounSets.add(e.getAsString()));
-        return new Pronouns(Collections.unmodifiableList(pronounSets));
-    }
 
+        JsonElement decorationEl = userObj.get("decoration");
+        Decoration decoration = decorationEl != null && !decorationEl.isJsonNull()
+            ? new Decoration(decorationEl.getAsString())
+            : null;
 
-    private Map<String, Pronouns> parseBulkResponse(JsonObject body) {
-        Map<String, Pronouns> result = new HashMap<>();
-        for (Map.Entry<String, JsonElement> entry : body.entrySet()) {
-            String userId = entry.getKey();
-            JsonObject userObj = entry.getValue().getAsJsonObject();
-            Pronouns pronouns = parseSingleResponse(userObj);
-            if (pronouns != null) {
-                result.put(userId, pronouns);
-            }
-        }
-        return result;
+        return new Pronouns(Collections.unmodifiableList(pronounSets), decoration);
     }
 
     private static String hash(Platform platform, String userId) {
