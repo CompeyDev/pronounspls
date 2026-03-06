@@ -158,18 +158,15 @@ public class SetPronounsCommand implements PronounsCommandManager.PronounsComman
         );
     }
 
-    protected static Text error(String message, @Nullable  Text special, @Nullable  ServerCommandSource source) {
+    protected static Text error(String message, @Nullable Text special, @Nullable ServerCommandSource source) {
         MutableText formattedMessage = Text.literal(message).formatted(Formatting.GRAY);
-        if (special != null) {
-            formattedMessage.append(special);
-        }
+        if (special != null) formattedMessage.append(special);
 
-        Text formatted = PronounsCommandManager.ERROR_PREFIX.copy();
+        Text formatted = PronounsCommandManager.ERROR_PREFIX.copy().append(formattedMessage);
         if (source != null) {
             source.sendFeedback(() -> formatted, false);
         }
 
         return formatted;
-
     }
 }
