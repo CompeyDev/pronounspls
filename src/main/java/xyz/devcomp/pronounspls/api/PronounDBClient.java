@@ -40,6 +40,7 @@ public class PronounDBClient {
     private final Duration cacheTtl;
     private final int cacheMaxSize;
     private final boolean cachingEnabled;
+    private final String userAgent;
 
     private PronounDBClient(Builder builder) {
         this.logger = builder.logger; // may be null
@@ -51,6 +52,7 @@ public class PronounDBClient {
         this.cacheTtl = builder.cacheTtl;
         this.cacheMaxSize = builder.cacheMaxSize;
         this.cachingEnabled = builder.cachingEnabled;
+        this.userAgent = builder.userAgent;
 
         if (cachingEnabled) {
             // LRU-like eviction
@@ -70,10 +72,11 @@ public class PronounDBClient {
     }
 
     public static class Builder {
-        private Logger logger        = null;
+        private Logger logger = null;
         private boolean cachingEnabled = false;
-        private Duration cacheTtl    = Duration.ofMinutes(5);
-        private int cacheMaxSize     = 1000;
+        private Duration cacheTtl = Duration.ofMinutes(5);
+        private int cacheMaxSize = 1000;
+        private String userAgent = "PronounDB-Java/1.0";
 
         /**
          * Sets the SL4J logging facade.
@@ -90,6 +93,11 @@ public class PronounDBClient {
             this.cachingEnabled = true;
             this.cacheTtl       = Objects.requireNonNull(ttl);
             this.cacheMaxSize   = maxSize;
+            return this;
+        }
+
+        public Builder customUserAgent(String userAgent) {
+            this.userAgent = userAgent;
             return this;
         }
 
@@ -267,7 +275,7 @@ public class PronounDBClient {
         HttpRequest request = HttpRequest.newBuilder()
             .uri(URI.create(url))
             .header("Accept", "application/json")
-            .header("User-Agent", PronounsPlease.MOD_ID + "/1.0") // TODO: get version?
+            .header("User-Agent", this.userAgent)
             .GET()
             .build();
 

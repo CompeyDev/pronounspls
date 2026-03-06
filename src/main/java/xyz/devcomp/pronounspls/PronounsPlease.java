@@ -66,6 +66,15 @@ public class PronounsPlease implements DedicatedServerModInitializer {
             pronoundb = PronounDBClient.builder()
                 .logger(LOGGER)
                 .withCache(PRONOUNS_REFRESH_DURATION, s.getMaxPlayerCount())
+                .customUserAgent(
+                    // e.g. pronounspls/0.1.0
+                    MOD_ID + "/" + LOADER
+                        .getModContainer(MOD_ID)
+                        .orElseThrow()
+                        .getMetadata()
+                        .getVersion()
+                        .getFriendlyString()
+                )
                 .build();
         });
 
