@@ -114,6 +114,7 @@ public class SetPronounsCommand implements PronounsCommandManager.PronounsComman
     private void setFromPronounDB(ServerPlayerEntity player, MinecraftServer server, ServerCommandSource source) {
         if (PronounsPlease.pronoundb == null) {
             error("PronounDB is unavailable in offline mode", null, source);
+            return;
         }
 
         PronounsPlease.pronoundb.lookupAsync(PronounDBClient.Platform.MINECRAFT, player.getUuid().toString())
