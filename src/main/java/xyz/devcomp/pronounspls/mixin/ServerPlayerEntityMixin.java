@@ -34,7 +34,6 @@ public class ServerPlayerEntityMixin {
             .orElse(null);
 
         if (messageTypeId != null) {
-            // TODO: Config option for where to place pronouns, command to set pronouns color per-player
             ServerPlayerEntity recipient = (ServerPlayerEntity) (Object) this;
             String language = recipient.getClientOptions().language();
 
@@ -43,7 +42,7 @@ public class ServerPlayerEntityMixin {
             if (pronounKey == null) return params;
 
             String translated = PronounsTranslationManager.INSTANCE.translate(language, pronounKey);
-            Text pronounText = Text.literal(translated).formatted(Formatting.DARK_PURPLE);
+            Text pronounText = Text.literal(translated).formatted(Formatting.DARK_AQUA);
 
             switch (messageTypeId.toString()) {
                 case "minecraft:msg_command_outgoing", "minecraft:team_msg_command_outgoing" -> {

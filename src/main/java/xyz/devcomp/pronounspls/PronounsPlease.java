@@ -87,7 +87,7 @@ public class PronounsPlease implements DedicatedServerModInitializer {
 
                     // TODO: Allow format configuration maybe?
 
-                    new Decoration("%1$s | <%2$s>: %3$s", List.of(Decoration.Parameter.TARGET, Decoration.Parameter.SENDER, Decoration.Parameter.CONTENT), Style.EMPTY),
+                    new Decoration("%1$s • <%2$s>: %3$s", List.of(Decoration.Parameter.TARGET, Decoration.Parameter.SENDER, Decoration.Parameter.CONTENT), Style.EMPTY),
                     Decoration.ofChat("chat.type.text.narrate") // default narration, unaffected by pronouns
                 ));
             });
