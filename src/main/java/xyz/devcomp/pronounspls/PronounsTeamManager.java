@@ -1,30 +1,64 @@
 package xyz.devcomp.pronounspls;
 
+import java.io.IOException;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 
+import com.google.gson.JsonArray;
+import com.google.gson.JsonElement;
+import com.google.gson.JsonObject;
 import net.minecraft.network.packet.s2c.play.TeamS2CPacket;
 import net.minecraft.scoreboard.Scoreboard;
 import net.minecraft.scoreboard.Team;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.network.ServerPlayerEntity;
-import net.minecraft.text.Decoration;
-import net.minecraft.text.MutableText;
 import net.minecraft.text.Text;
 import net.minecraft.util.Formatting;
 
 import org.jetbrains.annotations.Nullable;
+import xyz.devcomp.pronounspls.api.PronounDBClient;
+import xyz.devcomp.pronounspls.codec.PronounsSourceCodec;
 
 /**
  * Manages virtual scoreboard teams for displaying pronouns above player heads.
  * Teams are client-side only and do not pollute the server scoreboard.
  */
-public class PronounsTeamManager {
+public class PronounsTeamManager extends PronounsPersistable {
+    public static final PronounsTeamManager INSTANCE = new PronounsTeamManager();
+    private static final PronounsSourceCodec CODEC = PronounsSourceCodec.INSTANCE;
 
     // Map of player UUID -> their current pronouns source (PronounDB or custom)
-    private static final Map<UUID, PronounsSource> playerPronouns = new HashMap<>();
+    private final Map<UUID, PronounsSource> playerPronouns = new HashMap<>();
+
+    private PronounsTeamManager() {
+        super("pronouns.json");
+    }
+
+    @Override
+    public JsonElement save() {
+        JsonArray arr = new JsonArray();
+        for (Map.Entry<UUID, PronounsSource> entry : playerPronouns.entrySet()) {
+            JsonObject obj = new JsonObject();
+            obj.addProperty("uuid", entry.getKey().toString());
+            obj.add("source", CODEC.serialize(entry.getValue()));
+            arr.add(obj);
+        }
+        return arr;
+    }
+
+    @Override
+    public void load(JsonElement json) throws IOException {
+        for (JsonElement el : json.getAsJsonArray()) {
+            JsonObject obj = el.getAsJsonObject();
+            UUID uuid = UUID.fromString(obj.get("uuid").getAsString());
+            playerPronouns.put(uuid, CODEC.deserialize(obj.get("source")));
+        }
+
+        PronounsPlease.LOGGER.info("Loaded pronouns for {} players", playerPronouns.size());
+    }
+
 
     /**
      * Sets pronouns for a player from a given source and sends translated packets to all connected clients.
@@ -33,17 +67,15 @@ public class PronounsTeamManager {
      * @param source  the pronouns source (PronounDB weak ref or custom translation key)
      * @param server  the minecraft server instance
      */
-    public static void setPronouns(ServerPlayerEntity player, PronounsSource source, MinecraftServer server) {
+    public void setPronouns(ServerPlayerEntity player, PronounsSource source, MinecraftServer server) {
         Optional<String> pronounsKey = resolveKey(source);
         if (pronounsKey.isEmpty()) return;
 
         PronounsPlease.LOGGER.info("Setting pronouns for {} to {}", player.getStringifiedName(), pronounsKey.get());
         removePronouns(player, server);
         playerPronouns.put(player.getUuid(), source);
-
-        for (ServerPlayerEntity recipient : server.getPlayerManager().getPlayerList()) {
-            sendTeamPacket(player, pronounsKey.get(), resolveFlag(source).orElse(null), recipient, true);
-        }
+        saveToDisk(server); // FIXME: IO call which can be overhead with large simultaneous joins, do async debounce?
+        syncToAll(player, server);
     }
 
     /**
@@ -52,11 +84,15 @@ public class PronounsTeamManager {
      * @param player the player to remove pronouns for
      * @param server the minecraft server instance
      */
-    public static void removePronouns(ServerPlayerEntity player, MinecraftServer server) {
+    public void removePronouns(ServerPlayerEntity player, MinecraftServer server) {
         PronounsPlease.LOGGER.info("Removing pronouns for {}", player.getStringifiedName());
-
         if (!playerPronouns.containsKey(player.getUuid())) return;
-        playerPronouns.remove(player.getUuid());
+
+        // Invalidate and force refetch for PronounDB pronouns, leave custom pronouns intact to prevent
+        // loss of data before serialization to disk
+        if (playerPronouns.get(player.getUuid()) instanceof PronounsSource.PronounDB && PronounsPlease.pronoundb != null) {
+            PronounsPlease.pronoundb.invalidate(PronounDBClient.Platform.MINECRAFT, player.getUuidAsString());
+        }
 
         String teamName = PronounsPlease.MOD_ID + "_" + player.getUuid();
         Scoreboard tempScoreboard = new Scoreboard();
@@ -70,16 +106,44 @@ public class PronounsTeamManager {
      * @param recipient the newly joined player to sync to
      * @param server    the minecraft server instance
      */
-    public static void syncToPlayer(ServerPlayerEntity recipient, MinecraftServer server) {
+    public void syncToPlayer(ServerPlayerEntity recipient, MinecraftServer server) {
         PronounsPlease.LOGGER.info("Syncing virtual teams to player {}", recipient.getStringifiedName());
 
         for (Map.Entry<UUID, PronounsSource> entry : playerPronouns.entrySet()) {
             resolveKey(entry.getValue()).ifPresent(key -> {
-                ServerPlayerEntity target = server.getPlayerManager().getPlayer(entry.getKey());
+                // The joining player this was called for has not been placed as an entity
+                // and so their entry returns null, but we still must send the packets to
+                // them so that they can see their own pronouns
+                ServerPlayerEntity target = entry.getKey().equals(recipient.getUuid())
+                    ? recipient
+                    : server.getPlayerManager().getPlayer(entry.getKey());
+
                 if (target != null) {
-                    sendTeamPacket(target, key, resolveFlag(entry.getValue()).orElse(null), recipient, true);
+                    sendTeamPacket(target, key, resolveFlag(entry.getValue()).orElse(null), recipient);
                 }
             });
+        }
+    }
+
+    /**
+     * Syncs a player's pronouns to all connected clients.
+     *
+     * <p>This does the opposite of what {@link #syncToPlayer(ServerPlayerEntity, MinecraftServer)},
+     * does. Typically called when a player joins to ensure all existing clients
+     * see their pronouns.
+     *
+     * <p><b>NOTE</b>: {@link #setPronouns(ServerPlayerEntity, PronounsSource, MinecraftServer)}
+     * already calls this method to force a sync after setting the pronouns.
+     *
+     * @param player the player whose pronouns should be synced
+     * @param server the minecraft server instance
+     */
+    public void syncToAll(ServerPlayerEntity player, MinecraftServer server) {
+        Optional<String> key = getPronounsKey(player);
+        if (key.isEmpty()) return;
+
+        for (ServerPlayerEntity recipient : server.getPlayerManager().getPlayerList()) {
+            sendTeamPacket(player, key.get(), resolveFlag(playerPronouns.get(player.getUuid())).orElse(null), recipient);
         }
     }
 
@@ -88,12 +152,11 @@ public class PronounsTeamManager {
      * A temporary scoreboard is used per-send to avoid mutating a shared team object, which
      * would cause all recipients to see the last translation written.
      */
-    private static void sendTeamPacket(
+    private void sendTeamPacket(
         ServerPlayerEntity target,
         String pronounsKey,
         @Nullable PronounsPrideFlag prideFlag,
-        ServerPlayerEntity recipient,
-        boolean withMembers
+        ServerPlayerEntity recipient
     ) {
         String teamName = PronounsPlease.MOD_ID + "_" + target.getUuid();
         Scoreboard tempScoreboard = new Scoreboard();
@@ -110,13 +173,13 @@ public class PronounsTeamManager {
         tempTeam.getPlayerList().add(target.getStringifiedName());
         tempTeam.setPrefix(Text.literal("[").append(prefix).append("] "));
 
-        recipient.networkHandler.sendPacket(TeamS2CPacket.updateTeam(tempTeam, withMembers));
+        recipient.networkHandler.sendPacket(TeamS2CPacket.updateTeam(tempTeam, true));
     }
 
     /**
      * Gets the decoration if the source of the pronouns is PronounDB and one is equipped by the user.
      */
-    public static Optional<PronounsPrideFlag> getPrideFlag(UUID player) {
+    public Optional<PronounsPrideFlag> getPrideFlag(UUID player) {
         return Optional.ofNullable(playerPronouns.get(player))
             .flatMap(PronounsTeamManager::resolveFlag);
     }
@@ -124,7 +187,7 @@ public class PronounsTeamManager {
     /**
      * Gets the translation key for the pronouns registered for a player UUID, if present and still alive.
      */
-    public static Optional<String> getPronounsKey(UUID player) {
+    public Optional<String> getPronounsKey(UUID player) {
         return Optional.ofNullable(playerPronouns.get(player))
             .flatMap(PronounsTeamManager::resolveKey);
     }
@@ -132,14 +195,14 @@ public class PronounsTeamManager {
     /**
      * Gets the pronouns key registered for a player entity, if present and still alive.
      */
-    public static Optional<String> getPronounsKey(ServerPlayerEntity player) {
+    public Optional<String> getPronounsKey(ServerPlayerEntity player) {
         return getPronounsKey(player.getUuid());
     }
 
     /**
      * Gets the pronouns registered for a player in their language, if present and still alive.
      */
-    public static Optional<String> getTranslatedPronouns(ServerPlayerEntity player) {
+    public Optional<String> getTranslatedPronouns(ServerPlayerEntity player) {
         return getPronounsKey(player)
             .map(key -> PronounsTranslationManager.INSTANCE.translate(player, key));
     }
@@ -148,7 +211,7 @@ public class PronounsTeamManager {
      * Returns whether a player currently has live pronouns set.
      * For PronounDB sources, returns false if the cache entry has been evicted.
      */
-    public static boolean hasPronouns(UUID uuid) {
+    public boolean hasPronouns(UUID uuid) {
         return Optional.ofNullable(playerPronouns.get(uuid))
             .flatMap(PronounsTeamManager::resolveKey)
             .isPresent();

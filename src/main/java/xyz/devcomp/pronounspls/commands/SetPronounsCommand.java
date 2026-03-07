@@ -124,8 +124,8 @@ public class SetPronounsCommand implements PronounsCommandManager.PronounsComman
                         .INSTANCE
                         .translate(player, p.asTranslationKeys().getFirst());
 
-                    PronounsTeamManager.setPronouns(player, new PronounsSource.PronounDB(new WeakReference<>(p)), server);
-                    PronounsTeamManager.syncToPlayer(player, server);
+                    PronounsTeamManager.INSTANCE.setPronouns(player, new PronounsSource.PronounDB(new WeakReference<>(p)), server);
+                    PronounsTeamManager.INSTANCE.syncToPlayer(player, server);
                     source.sendFeedback(
                         () -> PronounsCommandManager.SUCCESS_PREFIX.copy().append(
                             Text.literal("Pronouns set to ")
@@ -145,8 +145,8 @@ public class SetPronounsCommand implements PronounsCommandManager.PronounsComman
     }
 
     private void setCustom(ServerPlayerEntity player, PronounKey key, MinecraftServer server, ServerCommandSource source) {
-        PronounsTeamManager.setPronouns(player, new PronounsSource.Custom(key.getTranslationKey()), server);
-        PronounsTeamManager.syncToPlayer(player, server);
+        PronounsTeamManager.INSTANCE.setPronouns(player, new PronounsSource.Custom(key.getTranslationKey()), server);
+        PronounsTeamManager.INSTANCE.syncToPlayer(player, server);
 
         source.sendFeedback(
             () -> PronounsCommandManager.SUCCESS_PREFIX.copy().append(

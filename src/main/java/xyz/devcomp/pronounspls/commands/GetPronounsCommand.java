@@ -38,7 +38,7 @@ public class GetPronounsCommand implements PronounsCommandManager.PronounsComman
 
         String language = viewer.getClientOptions().language();
 
-        PronounsTeamManager.getPronounsKey(subject).ifPresentOrElse(
+        PronounsTeamManager.INSTANCE.getPronounsKey(subject).ifPresentOrElse(
             key -> {
                 // We want the pronouns in the command runner's, not the player being queried's language
                 String translated = PronounsTranslationManager.INSTANCE.translate(language, key);

@@ -48,8 +48,8 @@ public class ServerPlayerEntityMixin {
 
             if (senderUuid == null) return params;
 
-            String pronounsKey = PronounsTeamManager.getPronounsKey(senderUuid).orElse(null);
-            PronounsPrideFlag prideFlag = PronounsTeamManager.getPrideFlag(senderUuid).orElse(null);
+            String pronounsKey = PronounsTeamManager.INSTANCE.getPronounsKey(senderUuid).orElse(null);
+            PronounsPrideFlag prideFlag = PronounsTeamManager.INSTANCE.getPrideFlag(senderUuid).orElse(null);
 
             if (pronounsKey == null)
                 return params;

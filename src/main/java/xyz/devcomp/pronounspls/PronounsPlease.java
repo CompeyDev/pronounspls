@@ -57,7 +57,9 @@ public class PronounsPlease implements DedicatedServerModInitializer {
             .get(ResourceType.SERVER_DATA)
             .registerReloader(PronounsTranslationManager.getFabricId(), PronounsTranslationManager.INSTANCE);
 
+        ServerLifecycleEvents.SERVER_STOPPING.register(PronounsTeamManager.INSTANCE::saveToDisk);
         ServerLifecycleEvents.SERVER_STARTED.register(s -> {
+            PronounsTeamManager.INSTANCE.loadFromDisk(s);
             if (!s.isOnlineMode()) {
                 LOGGER.warn("PronounDB integration does not work for offline mode servers!");
                 return;
@@ -95,7 +97,7 @@ public class PronounsPlease implements DedicatedServerModInitializer {
         });
 
         // Virtual teams initialization and cleanup
-        ServerPlayConnectionEvents.DISCONNECT.register(((handler, s) -> PronounsTeamManager.removePronouns(handler.player, s)));
+        ServerPlayConnectionEvents.DISCONNECT.register(((handler, s) -> PronounsTeamManager.INSTANCE.removePronouns(handler.player, s)));
         ServerPlayConnectionEvents.JOIN.register((handler, _packetSender, s) -> {
             if (pronoundb != null) {
                 // NOTE: For now, we use only the first pronoun. We need to consider how we should represent
@@ -103,9 +105,8 @@ public class PronounsPlease implements DedicatedServerModInitializer {
                 pronoundb.lookupAsync(PronounDBClient.Platform.MINECRAFT, handler.player.getUuidAsString())
                     .thenAccept(pronouns -> pronouns
                         .ifPresent(p -> {
-                            server.execute(() -> {
-                                PronounsTeamManager.setPronouns(handler.player, new PronounsSource.PronounDB(new WeakReference<>(p)), server);
-                                PronounsTeamManager.syncToPlayer(handler.player, s);
+                            s.execute(() -> {
+                                PronounsTeamManager.INSTANCE.setPronouns(handler.player, new PronounsSource.PronounDB(new WeakReference<>(p)), server);
                             });
                         }))
                     .exceptionally(e -> {
@@ -113,12 +114,16 @@ public class PronounsPlease implements DedicatedServerModInitializer {
                         return null;
                     });
             }
+
+            s.execute(() -> {
+                // Sync any custom pronouns that may have been loaded from disk
+                PronounsTeamManager.INSTANCE.syncToPlayer(handler.player, s);
+                PronounsTeamManager.INSTANCE.syncToAll(handler.player, s); // FIXME: redundant if setPronouns called
+            });
         });
 
         // Commands!
         CommandRegistrationCallback.EVENT.register(PronounsCommandManager::register);
-
-        // TODO: Save custom pronouns to disk, or fetch from pronoundb
     }
 
     /**
@@ -131,7 +136,7 @@ public class PronounsPlease implements DedicatedServerModInitializer {
         for (ServerPlayerEntity recipient : server.getPlayerManager().getPlayerList()) {
             String translated = PronounsTranslationManager.INSTANCE.translate(
                 recipient,
-                PronounsTeamManager
+                PronounsTeamManager.INSTANCE
                     .getPronounsKey(player)
                     .orElse("pronounspls.pronouns.they") // FIXME: do not default to they/them
             );

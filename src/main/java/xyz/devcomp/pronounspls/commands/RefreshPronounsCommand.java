@@ -36,7 +36,7 @@ public class RefreshPronounsCommand implements PronounsCommandManager.PronounsCo
                 PronounsPlease.pronoundb.lookupAsync(PronounDBClient.Platform.MINECRAFT, player.getUuidAsString())
                     .thenAccept(pronouns -> server.execute(() -> {
                         if (pronouns.isEmpty()) {
-                            PronounsTeamManager.removePronouns(player, server);
+                            PronounsTeamManager.INSTANCE.removePronouns(player, server);
                             source.sendFeedback(
                                 () -> PronounsCommandManager.SUCCESS_PREFIX.copy().append(
                                     Text.literal("No pronouns found on PronounDB, pronouns removed").formatted(Formatting.GRAY)
@@ -47,8 +47,8 @@ public class RefreshPronounsCommand implements PronounsCommandManager.PronounsCo
                         }
 
                         pronouns.ifPresent(p -> {
-                            PronounsTeamManager.setPronouns(player, new PronounsSource.PronounDB(new WeakReference<>(p)), server);
-                            PronounsTeamManager.syncToPlayer(player, server);
+                            PronounsTeamManager.INSTANCE.setPronouns(player, new PronounsSource.PronounDB(new WeakReference<>(p)), server);
+                            PronounsTeamManager.INSTANCE.syncToPlayer(player, server);
                             source.sendFeedback(
                                 () -> PronounsCommandManager.SUCCESS_PREFIX.copy().append(
                                     Text.literal("Pronouns refreshed from PronounDB")
