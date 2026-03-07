@@ -13,7 +13,14 @@
 			}
 		}
 	],
-	"contributors": [],
+  "contributors": [
+    {
+      "name": "devin",
+      "contact": {
+        "homepage": "https://github.com/intergrav"
+      }
+    }
+  ],
 	"contact": {
 		"homepage": "https://modrinth.com/mod/pronounspls",
 		"sources": "https://github.com/CompeyDev/pronouns-please",
