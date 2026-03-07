@@ -25,7 +25,7 @@ public abstract class PronounsPersistable {
             .resolve(PronounsPlease.MOD_ID)
             .resolve(filename);
 
-        PronounsPlease.LOGGER.info("Flushing pronouns to {}", path);
+        PronounsPlease.LOGGER.debug("Flushing pronouns to {}", path);
 
         try {
             Files.createDirectories(path.getParent());
