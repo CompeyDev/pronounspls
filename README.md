@@ -1,4 +1,4 @@
-<img align="right" height="250" width="250" src="src/main/resources/assets/pronounspls/icon.png" />
+<img align="right" height="250" width="250" src="https://raw.githubusercontent.com/CompeyDev/pronounspls/refs/heads/main/src/main/resources/assets/pronounspls/icon.png" />
 
 # Pronouns, Please!
 
