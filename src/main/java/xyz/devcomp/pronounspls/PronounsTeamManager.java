@@ -88,12 +88,6 @@ public class PronounsTeamManager extends PronounsPersistable {
         PronounsPlease.LOGGER.info("Removing pronouns for {}", player.getStringifiedName());
         if (!playerPronouns.containsKey(player.getUuid())) return;
 
-        // Invalidate and force refetch for PronounDB pronouns, leave custom pronouns intact to prevent
-        // loss of data before serialization to disk
-        if (playerPronouns.get(player.getUuid()) instanceof PronounsSource.PronounDB && PronounsPlease.pronoundb != null) {
-            PronounsPlease.pronoundb.invalidate(PronounDBClient.Platform.MINECRAFT, player.getUuidAsString());
-        }
-
         String teamName = PronounsPlease.MOD_ID + "_" + player.getUuid();
         Scoreboard tempScoreboard = new Scoreboard();
         Team tempTeam = tempScoreboard.addTeam(teamName);
