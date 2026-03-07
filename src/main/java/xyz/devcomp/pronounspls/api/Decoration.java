@@ -8,10 +8,10 @@ import java.util.Set;
 public record Decoration(String name) {
     private static final Set<String> PRIDE_DECORATIONS = Set.of(
         "pride",
-        "pride_bisexual",
+        "pride_bi",
         "pride_lesbian",
-        "pride_pansexual",
-        "pride_transgender"
+        "pride_pan",
+        "pride_trans"
     );
 
     /** Returns true if the decoration is pride themed.. */

@@ -33,12 +33,12 @@ public enum PronounsPrideFlag {
             return Optional.empty();
 
         return Optional.ofNullable(switch (decoration.name()) {
-            case "pride"             -> RAINBOW;
-            case "pride_bisexual"    -> BISEXUAL;
-            case "pride_lesbian"     -> LESBIAN;
-            case "pride_pansexual"   -> PANSEXUAL;
-            case "pride_transgender" -> TRANS;
-            default                  -> null;
+            case "pride"         -> RAINBOW;
+            case "pride_bi"      -> BISEXUAL;
+            case "pride_lesbian" -> LESBIAN;
+            case "pride_pan"     -> PANSEXUAL;
+            case "pride_trans"   -> TRANS;
+            default              -> null;
         });
     }
 
