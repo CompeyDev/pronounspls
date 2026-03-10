@@ -1,14 +1,11 @@
 package xyz.devcomp.pronounspls;
 
 import java.io.IOException;
-import java.util.HashMap;
-import java.util.Map;
-import java.util.Optional;
-import java.util.UUID;
+import java.util.*;
 
-import com.google.gson.JsonArray;
-import com.google.gson.JsonElement;
-import com.google.gson.JsonObject;
+import xyz.devcomp.pronounspls.codec.PronounsSourceCodec;
+
+import net.minecraft.entity.LivingEntity;
 import net.minecraft.network.packet.s2c.play.TeamS2CPacket;
 import net.minecraft.scoreboard.Scoreboard;
 import net.minecraft.scoreboard.Team;
@@ -17,9 +14,11 @@ import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.text.Text;
 import net.minecraft.util.Formatting;
 
+import com.google.gson.JsonArray;
+import com.google.gson.JsonElement;
+import com.google.gson.JsonObject;
+
 import org.jetbrains.annotations.Nullable;
-import xyz.devcomp.pronounspls.api.PronounDBClient;
-import xyz.devcomp.pronounspls.codec.PronounsSourceCodec;
 
 /**
  * Manages virtual scoreboard teams for displaying pronouns above player heads.
@@ -31,6 +30,7 @@ public class PronounsTeamManager extends PronounsPersistable {
 
     // Map of player UUID -> their current pronouns source (PronounDB or custom)
     private final Map<UUID, PronounsSource> playerPronouns = new HashMap<>();
+    private final Set<UUID> trackedPets = new HashSet<>();
 
     private PronounsTeamManager() {
         super("pronouns.json");
@@ -59,13 +59,12 @@ public class PronounsTeamManager extends PronounsPersistable {
         PronounsPlease.LOGGER.info("Loaded pronouns for {} players", playerPronouns.size());
     }
 
-
     /**
      * Sets pronouns for a player from a given source and sends translated packets to all connected clients.
      *
-     * @param player  the player to set pronouns for
-     * @param source  the pronouns source (PronounDB weak ref or custom translation key)
-     * @param server  the minecraft server instance
+     * @param player the player to set pronouns for
+     * @param source the pronouns source (PronounDB weak ref or custom translation key)
+     * @param server the minecraft server instance
      */
     public void setPronouns(ServerPlayerEntity player, PronounsSource source, MinecraftServer server) {
         Optional<String> pronounsKey = resolveKey(source);
@@ -116,6 +115,10 @@ public class PronounsTeamManager extends PronounsPersistable {
                     sendTeamPacket(target, key, resolveFlag(entry.getValue()).orElse(null), recipient);
                 }
             });
+        }
+
+        for (UUID petUuid : trackedPets) {
+            assignPetDummyTeam(petUuid.toString(), recipient);
         }
     }
 
@@ -168,6 +171,56 @@ public class PronounsTeamManager extends PronounsPersistable {
         tempTeam.setPrefix(Text.literal("[").append(prefix).append("] "));
 
         recipient.networkHandler.sendPacket(TeamS2CPacket.updateTeam(tempTeam, true));
+    }
+
+    /**
+     * Registers a tamed entity as needing a dummy team assignment to prevent
+     * it from inheriting its owner's pronouns team prefix on clients.
+     *
+     * @param entityUuid the UUID of the tamed entity
+     */
+    public void trackPet(UUID entityUuid) {
+        trackedPets.add(entityUuid);
+    }
+
+    /**
+     * Unregisters a tamed entity from dummy team tracking, typically called
+     * when the entity is no longer tracked by any player or becomes untamed.
+     *
+     * @param entityUuid the UUID of the tamed entity
+     */
+    public void untrackPet(UUID entityUuid) {
+        trackedPets.remove(entityUuid);
+    }
+
+    /**
+     * Assigns a tamed entity to its own empty dummy team to prevent it from
+     * inheriting its owner's pronouns team prefix.
+     *
+     * @param entityUuid the tamed entity's UUID string (from getNameForScoreboard)
+     * @param recipient  the client to send the packets to
+     */
+    public void assignPetDummyTeam(String entityUuid, ServerPlayerEntity recipient) {
+        String dummyTeamName = PronounsPlease.MOD_ID + "_pet_" + entityUuid;
+        Scoreboard tempScoreboard = new Scoreboard();
+        Team dummyTeam = tempScoreboard.addTeam(dummyTeamName);
+
+        recipient.networkHandler.sendPacket(TeamS2CPacket.updateTeam(dummyTeam, true));
+        recipient.networkHandler.sendPacket(TeamS2CPacket.changePlayerTeam(dummyTeam, entityUuid, TeamS2CPacket.Operation.ADD));
+    }
+
+    /**
+     * Removes the dummy team assigned to a tamed entity.
+     *
+     * @param entityUuid the tamed entity's UUID string
+     * @param recipient  the client to send the packet to
+     */
+    public void removePetDummyTeam(String entityUuid, ServerPlayerEntity recipient) {
+        String dummyTeamName = PronounsPlease.MOD_ID + "_pet_" + entityUuid;
+        Scoreboard tempScoreboard = new Scoreboard();
+        Team dummyTeam = tempScoreboard.addTeam(dummyTeamName);
+
+        recipient.networkHandler.sendPacket(TeamS2CPacket.updateRemovedTeam(dummyTeam));
     }
 
     /**

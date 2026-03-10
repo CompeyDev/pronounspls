@@ -5,6 +5,8 @@
 	"mixins": [
       "ServerPlayerEntityMixin",
       "PlayerManagerMixin",
+      "EntityTrackerEntryMixin",
+      "TameableEntityMixin",
       "accessor.PlayerListS2CPacketAccessor"
     ],
 	"injectors": {
