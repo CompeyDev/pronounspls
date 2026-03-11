@@ -2,10 +2,11 @@ package xyz.devcomp.pronounspls;
 
 import java.io.IOException;
 import java.io.InputStreamReader;
+import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.HashMap;
 import java.util.Map;
 
-import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.resource.ResourceManager;
 import net.minecraft.resource.SynchronousResourceReloader;
 import net.minecraft.server.network.ServerPlayerEntity;
@@ -24,10 +25,11 @@ import com.google.gson.JsonParser;
  */
 public class PronounsTranslationManager implements SynchronousResourceReloader {
     private final Map<String, Map<String, String>> translations = new HashMap<>();
+    private final Map<String, String> fallbacks = new HashMap<>();
 
     public static final PronounsTranslationManager INSTANCE = new PronounsTranslationManager();
     private static final String DEFAULT_LOCALE = "en_us";
-
+    private static final Identifier FALLBACKS_ID = Identifier.of(PronounsPlease.MOD_ID, "lang_fallbacks.json");
 
     @Override
     public String getName() {
@@ -43,15 +45,18 @@ public class PronounsTranslationManager implements SynchronousResourceReloader {
 
     /**
      * Clears and reloads all translations from {@code data/pronounspls/lang/}
-     * on datapack reload. Each JSON file's name (without extension) is used as
-     * the locale code.
+     * and fallback rules from {@code data/pronounspls/lang_fallbacks.json}
+     * on datapack reload.
      *
      * @param manager the resource manager providing access to datapack files
      */
     @Override
     public void reload(ResourceManager manager) {
         translations.clear();
+        fallbacks.clear();
 
+        // Load translations
+        Instant start = Instant.now();
         manager.findResources("lang", path -> path.getPath().endsWith(".json"))
             .forEach((id, resource) -> {
                 if (!id.getNamespace().equals(PronounsPlease.MOD_ID)) return;
@@ -65,45 +70,67 @@ public class PronounsTranslationManager implements SynchronousResourceReloader {
                     Map<String, String> langMap = new HashMap<>();
                     obj.entrySet().forEach(e -> langMap.put(e.getKey(), e.getValue().getAsString()));
                     translations.put(language, langMap);
-                    PronounsPlease.LOGGER.info("Loaded {} pronoun translations for {} from datapack", langMap.size(), language);
+                    PronounsPlease.LOGGER.debug("Loaded {} pronoun translations for {} from datapack", langMap.size(), language);
                 } catch (IOException e) {
                     PronounsPlease.LOGGER.error(e.toString());
                 }
             });
+
+        PronounsPlease.LOGGER.info("Loaded {} translations in {}ms", translations.size(), ChronoUnit.MILLIS.between(start, Instant.now()));
+
+        // Load fallbacks
+        manager.getResource(FALLBACKS_ID).ifPresent(resource -> {
+            try (var stream = resource.getInputStream()) {
+                JsonObject obj = JsonParser.parseReader(new InputStreamReader(stream)).getAsJsonObject();
+                obj.entrySet().forEach(e -> {
+                    // Invert the fallbacks to have a constant O(1) read complexity
+                    String target = e.getKey();
+                    e.getValue().getAsJsonArray().forEach(locale ->
+                        fallbacks.put(locale.getAsString(), target)
+                    );
+                });
+                PronounsPlease.LOGGER.info("Loaded {} language fallback rules from datapack", fallbacks.size());
+            } catch (IOException e) {
+                PronounsPlease.LOGGER.error(e.toString());
+            }
+        });
     }
+
     /**
-     * Translates a key into the given language.
+     * Translates a key into the given language, walking the fallback chain
+     * defined in {@code lang_fallbacks.json} before falling back to
+     * {@value DEFAULT_LOCALE}, and finally the raw key itself.
      *
-     * <p>Falls back to {@value DEFAULT_LOCALE} if the key is not found in the requested
-     * language, and falls back to the raw key itself if not found in the default locale
-     * either.
-     *
-     * @param language  the locale code (see <a href="https://minecraft.wiki/w/Language#Languages">the wiki</a>)
-     * @param key       the translation key to look up
+     * @param language the locale code (see <a href="https://minecraft.wiki/w/Language#Languages">the wiki</a>)
+     * @param key      the translation key to look up
      * @return the translated string
      */
     public String translate(String language, String key) {
         PronounsPlease.LOGGER.debug("Translating pronoun key {} in {}", key, language);
+
+        String current = language;
+        while (current != null) {
+            // Try to translate into exact locale, or default to any of its fallback locales
+            String result = translations.getOrDefault(current, Map.of()).get(key);
+            if (result != null) return result;
+            String next = fallbacks.get(current);
+            current = next != null && !next.equals(language) ? next : null;
+        }
+
+        // If we still have no translation, finally fallback to en_us
         return translations
-            .getOrDefault(language, Map.of())
-            .getOrDefault(key, translations
-                .getOrDefault(DEFAULT_LOCALE, Map.of())
-                .getOrDefault(key, key));
+            .getOrDefault(DEFAULT_LOCALE, Map.of())
+            .getOrDefault(key, key);
     }
 
     /**
      * Translates a key into the player's preferred language.
      *
-     * <p>Falls back to {@value DEFAULT_LOCALE} if the key is not found in the requested
-     * language, and falls back to the raw key itself if not found in the default locale
-     * either.
-     *
-     * @param player    the player whose locale it should be translated to
-     * @param key       the translation key to look up
+     * @param player the player whose locale it should be translated to
+     * @param key    the translation key to look up
      * @return the translated string
      */
     public String translate(ServerPlayerEntity player, String key) {
-        String language = player.getClientOptions().language();
-        return this.translate(language, key);
+        return this.translate(player.getClientOptions().language(), key);
     }
 }
