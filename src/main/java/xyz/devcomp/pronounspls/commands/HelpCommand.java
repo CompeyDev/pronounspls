@@ -1,6 +1,5 @@
 package xyz.devcomp.pronounspls.commands;
 
-import xyz.devcomp.pronounspls.PronounsPlease;
 import xyz.devcomp.pronounspls.PronounsCommandManager;
 
 import static net.minecraft.server.command.CommandManager.literal;
@@ -21,16 +20,10 @@ public class HelpCommand implements PronounsCommandManager.PronounsCommand {
         root.then(literal("help")
             .executes(ctx -> {
                 ServerCommandSource source = ctx.getSource();
-
                 List<PronounsCommandManager.CommandInfo> infos = PronounsCommandManager.SUBCOMMANDS.stream()
                     .map(s -> s.getClass().getAnnotation(PronounsCommandManager.CommandInfo.class))
                     .filter(Objects::nonNull)
                     .toList();
-
-                int maxLength = infos.stream()
-                    .mapToInt(i -> i.usage().length())
-                    .max()
-                    .orElse(0);
 
                 source.sendFeedback(() -> Text.literal("--- ")
                         .formatted(Formatting.GRAY)
@@ -39,8 +32,7 @@ public class HelpCommand implements PronounsCommandManager.PronounsCommand {
                     false);
 
                 for (PronounsCommandManager.CommandInfo info : infos) {
-                    String padded = String.format("%-" + maxLength + "s", info.usage());
-                    source.sendFeedback(() -> Text.literal(padded)
+                    source.sendFeedback(() -> Text.literal(info.usage())
                             .formatted(Formatting.AQUA)
                             .append(Text.literal(" - ").formatted(Formatting.GRAY))
                             .append(Text.literal(info.description()).formatted(Formatting.WHITE)),
