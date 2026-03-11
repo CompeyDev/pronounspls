@@ -40,32 +40,11 @@ public class ServerPlayerEntityMixin {
             ServerPlayerEntity recipient = (ServerPlayerEntity) (Object) this;
             String language = recipient.getClientOptions().language();
 
-            // Extract the sender's UUID from targetName carrier set by `PlayerManagerMixin`
-            UUID senderUuid = params.targetName()
-                .map(Text::getString)
-                .map(UUID::fromString)
-                .orElse(null);
-
-            if (senderUuid == null) return params;
-
-            String pronounsKey = PronounsTeamManager.INSTANCE.getPronounsKey(senderUuid).orElse(null);
-            PronounsPrideFlag prideFlag = PronounsTeamManager.INSTANCE.getPrideFlag(senderUuid).orElse(null);
-
-            if (pronounsKey == null)
-                return params;
-
-            String translated = PronounsTranslationManager.INSTANCE.translate(language, pronounsKey);
-            Text pronounText = prideFlag != null ? prideFlag.apply(translated) : Text.literal(translated).formatted(Formatting.GRAY);
-
             switch (messageTypeId.toString()) {
                 case "minecraft:msg_command_outgoing", "minecraft:team_msg_command_outgoing" -> {
                     // Message includes a target; must be an outgoing whisper or similar, so we use the regular type
                     PronounsPlease.LOGGER.debug("Whisper detected: {}, {}", params.targetName(), params.type().getIdAsString());
-                    Text nameWithPronouns = MutableText.of(params.name().getContent())
-                        .append(pronounText)
-                        .formatted(Formatting.ITALIC);
-
-                    return new MessageType.Parameters(params.type(), nameWithPronouns, Optional.empty());
+                    return params;
                 }
 
                 case "minecraft:chat" -> {
@@ -74,6 +53,23 @@ public class ServerPlayerEntityMixin {
                         .getOrThrow(RegistryKeys.MESSAGE_TYPE)
                         .getEntry(PronounsPlease.PRONOUNS_MESSAGE_TYPE_ID)
                         .orElseThrow();
+
+                    // Extract the sender's UUID from targetName carrier set by `PlayerManagerMixin`
+                    UUID senderUuid = params.targetName()
+                        .map(Text::getString)
+                        .map(UUID::fromString)
+                        .orElse(null);
+
+                    if (senderUuid == null) return params;
+
+                    String pronounsKey = PronounsTeamManager.INSTANCE.getPronounsKey(senderUuid).orElse(null);
+                    PronounsPrideFlag prideFlag = PronounsTeamManager.INSTANCE.getPrideFlag(senderUuid).orElse(null);
+
+                    if (pronounsKey == null)
+                        return params;
+
+                    String translated = PronounsTranslationManager.INSTANCE.translate(language, pronounsKey);
+                    Text pronounText = prideFlag != null ? prideFlag.apply(translated) : Text.literal(translated).formatted(Formatting.GRAY);
 
                     // Regular chat messages never have a target, so we can use it to store our pronoun and use a custom type
                     return new MessageType.Parameters(messageType, params.name(), Optional.of(pronounText));
