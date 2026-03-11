@@ -7,7 +7,6 @@
       "PlayerManagerMixin",
       "EntityTrackerEntryMixin",
       "TameableEntityMixin",
-      "accessor.PlayerListS2CPacketAccessor"
     ],
 	"injectors": {
 		"defaultRequire": 1

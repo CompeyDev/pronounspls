@@ -2,27 +2,18 @@ package xyz.devcomp.pronounspls;
 
 import java.lang.ref.WeakReference;
 import java.time.Duration;
-import java.util.EnumSet;
 import java.util.List;
 
 import xyz.devcomp.pronounspls.api.PronounDBClient;
-import xyz.devcomp.pronounspls.mixin.accessor.PlayerListS2CPacketAccessor;
 
-import net.minecraft.entity.player.PlayerModelPart;
 import net.minecraft.resource.ResourceType;
-import net.minecraft.text.Text;
-import net.minecraft.util.Formatting;
-import net.minecraft.util.Nullables;
 import net.minecraft.util.Identifier;
 import net.minecraft.server.MinecraftServer;
-import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.registry.Registry;
 import net.minecraft.registry.RegistryKeys;
 import net.minecraft.text.Decoration;
 import net.minecraft.text.Style;
-import net.minecraft.network.packet.s2c.play.PlayerListS2CPacket;
 import net.minecraft.network.message.MessageType;
-import net.minecraft.network.encryption.PublicPlayerSession;
 
 import net.fabricmc.loader.api.FabricLoader;
 import net.fabricmc.api.DedicatedServerModInitializer;
@@ -124,48 +115,5 @@ public class PronounsPlease implements DedicatedServerModInitializer {
 
         // Commands!
         CommandRegistrationCallback.EVENT.register(PronounsCommandManager::register);
-    }
-
-    /**
-     * Syncs the player list entry for a specific player for all clients, respecting
-     * their set language. Typically called once the pronouns are updated for a player.
-     *
-     * @param player the player to update the player list for
-     */
-    public static void refreshPlayerList(ServerPlayerEntity player) {
-        for (ServerPlayerEntity recipient : server.getPlayerManager().getPlayerList()) {
-            String translated = PronounsTranslationManager.INSTANCE.translate(
-                recipient,
-                PronounsTeamManager.INSTANCE
-                    .getPronounsKey(player)
-                    .orElse("pronounspls.pronouns.they") // FIXME: do not default to they/them
-            );
-
-
-            Text nameWithPronouns = Text.literal("[" + translated + "] ")
-                .formatted(Formatting.GRAY)
-                .append(player.getName().copy().formatted(Formatting.WHITE));;
-
-            // Build a fake entry with the translated name and gaslight each client
-            PlayerListS2CPacket.Entry entry = new PlayerListS2CPacket.Entry(
-                player.getUuid(),
-                player.getGameProfile(),
-                true,
-                player.networkHandler.getLatency(),
-                player.getGameMode(),
-                nameWithPronouns,
-                player.isModelPartVisible(PlayerModelPart.HAT),
-                player.getPlayerListOrder(),
-                Nullables.map(player.getSession(), PublicPlayerSession::toSerialized)
-            );
-
-            PlayerListS2CPacket packet = new PlayerListS2CPacket(
-                EnumSet.of(PlayerListS2CPacket.Action.UPDATE_DISPLAY_NAME),
-                List.of(player)
-            );
-
-            ((PlayerListS2CPacketAccessor) packet).setEntries(List.of(entry));
-            recipient.networkHandler.sendPacket(packet);
-        }
     }
 }
