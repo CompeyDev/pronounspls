@@ -2,10 +2,11 @@ package xyz.devcomp.pronounspls.commands;
 
 import xyz.devcomp.pronounspls.PronounsCommandManager;
 
-import static net.minecraft.server.command.CommandManager.literal;
-import net.minecraft.server.command.ServerCommandSource;
-import net.minecraft.util.Formatting;
-import net.minecraft.text.Text;
+import static net.minecraft.commands.Commands.literal;
+
+import net.minecraft.ChatFormatting;
+import net.minecraft.commands.CommandSourceStack;
+import net.minecraft.network.chat.Component;
 
 import com.mojang.brigadier.builder.LiteralArgumentBuilder;
 
@@ -16,26 +17,26 @@ import java.util.Objects;
 @PronounsCommandManager.CommandInfo(usage = "/pronounspls help", description = "Show this help message")
 public class HelpCommand implements PronounsCommandManager.PronounsCommand {
     @Override
-    public void register(LiteralArgumentBuilder<ServerCommandSource> root) {
+    public void register(LiteralArgumentBuilder<CommandSourceStack> root) {
         root.then(literal("help")
             .executes(ctx -> {
-                ServerCommandSource source = ctx.getSource();
+                CommandSourceStack source = ctx.getSource();
                 List<PronounsCommandManager.CommandInfo> infos = PronounsCommandManager.SUBCOMMANDS.stream()
                     .map(s -> s.getClass().getAnnotation(PronounsCommandManager.CommandInfo.class))
                     .filter(Objects::nonNull)
                     .toList();
 
-                source.sendFeedback(() -> Text.literal("--- ")
-                        .formatted(Formatting.GRAY)
-                        .append(Text.literal("Pronouns, Please!").formatted(Formatting.GREEN, Formatting.BOLD))
-                        .append(Text.literal(" ---").formatted(Formatting.GRAY)),
+                source.sendSuccess(() -> Component.literal("--- ")
+                        .withStyle(ChatFormatting.GRAY)
+                        .append(Component.literal("Pronouns, Please!").withStyle(ChatFormatting.GREEN, ChatFormatting.BOLD))
+                        .append(Component.literal(" ---").withStyle(ChatFormatting.GRAY)),
                     false);
 
                 for (PronounsCommandManager.CommandInfo info : infos) {
-                    source.sendFeedback(() -> Text.literal(info.usage())
-                            .formatted(Formatting.AQUA)
-                            .append(Text.literal(" - ").formatted(Formatting.GRAY))
-                            .append(Text.literal(info.description()).formatted(Formatting.WHITE)),
+                    source.sendSuccess(() -> Component.literal(info.usage())
+                            .withStyle(ChatFormatting.AQUA)
+                            .append(Component.literal(" - ").withStyle(ChatFormatting.GRAY))
+                            .append(Component.literal(info.description()).withStyle(ChatFormatting.WHITE)),
                         false);
                 }
 

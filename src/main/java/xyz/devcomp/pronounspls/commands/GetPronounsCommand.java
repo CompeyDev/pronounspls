@@ -4,13 +4,14 @@ import xyz.devcomp.pronounspls.PronounsCommandManager;
 import xyz.devcomp.pronounspls.PronounsTeamManager;
 import xyz.devcomp.pronounspls.PronounsTranslationManager;
 
-import static net.minecraft.server.command.CommandManager.argument;
-import static net.minecraft.server.command.CommandManager.literal;
-import net.minecraft.command.argument.EntityArgumentType;
-import net.minecraft.server.command.ServerCommandSource;
-import net.minecraft.server.network.ServerPlayerEntity;
-import net.minecraft.text.Text;
-import net.minecraft.util.Formatting;
+import static net.minecraft.commands.Commands.argument;
+import static net.minecraft.commands.Commands.literal;
+
+import net.minecraft.ChatFormatting;
+import net.minecraft.commands.CommandSourceStack;
+import net.minecraft.commands.arguments.EntityArgument;
+import net.minecraft.network.chat.Component;
+import net.minecraft.server.level.ServerPlayer;
 
 import com.mojang.brigadier.builder.LiteralArgumentBuilder;
 import com.mojang.brigadier.context.CommandContext;
@@ -21,42 +22,42 @@ import org.jetbrains.annotations.Nullable;
 @PronounsCommandManager.CommandInfo(usage = "/pronounspls get [player]", description = "Get your or another player's current pronouns")
 public class GetPronounsCommand implements PronounsCommandManager.PronounsCommand {
     @Override
-    public void register(LiteralArgumentBuilder<ServerCommandSource> root) {
+    public void register(LiteralArgumentBuilder<CommandSourceStack> root) {
         root.then(literal("get")
             .executes(ctx -> execute(ctx, null))
-            .then(argument("player", EntityArgumentType.player())
-                .executes(ctx -> execute(ctx, EntityArgumentType.getPlayer(ctx, "player")))
+            .then(argument("player", EntityArgument.player())
+                .executes(ctx -> execute(ctx, EntityArgument.getPlayer(ctx, "player")))
             )
         );
     }
 
-    private static int execute(CommandContext<ServerCommandSource> ctx, @Nullable ServerPlayerEntity target) throws CommandSyntaxException {
-        ServerCommandSource source = ctx.getSource();
-        ServerPlayerEntity viewer = source.getPlayerOrThrow();
-        ServerPlayerEntity subject = target != null ? target : viewer;
-        boolean isSelf = subject.getUuid().equals(viewer.getUuid());
+    private static int execute(CommandContext<CommandSourceStack> ctx, @Nullable ServerPlayer target) throws CommandSyntaxException {
+        CommandSourceStack source = ctx.getSource();
+        ServerPlayer viewer = source.getPlayerOrException();
+        ServerPlayer subject = target != null ? target : viewer;
+        boolean isSelf = subject.getUUID().equals(viewer.getUUID());
 
-        String language = viewer.getClientOptions().language();
+        String language = viewer.clientInformation().language();
 
         PronounsTeamManager.INSTANCE.getPronounsKey(subject).ifPresentOrElse(
             key -> {
                 // We want the pronouns in the command runner's, not the player being queried's language
                 String translated = PronounsTranslationManager.INSTANCE.translate(language, key);
-                source.sendFeedback(
+                source.sendSuccess(
                     () -> PronounsCommandManager.SUCCESS_PREFIX
                         .copy()
-                        .append(Text.literal(isSelf ? "Your" : subject.getName().getString() + "'s").formatted(Formatting.GRAY))
-                        .append(Text.literal(" pronouns are set to ").formatted(Formatting.GRAY))
-                        .append(Text.literal(translated).formatted(Formatting.AQUA)),
+                        .append(Component.literal(isSelf ? "Your" : subject.getName().getString() + "'s").withStyle(ChatFormatting.GRAY))
+                        .append(Component.literal(" pronouns are set to ").withStyle(ChatFormatting.GRAY))
+                        .append(Component.literal(translated).withStyle(ChatFormatting.AQUA)),
                     false
                 );
             },
 
-            () -> source.sendFeedback(
+            () -> source.sendSuccess(
                 () -> PronounsCommandManager.ERROR_PREFIX
                     .copy()
-                    .append(Text.literal(isSelf ? "You have" : subject.getName().getString() + " has").formatted(Formatting.GRAY))
-                    .append(Text.literal(" no pronouns set.").formatted(Formatting.GRAY)),
+                    .append(Component.literal(isSelf ? "You have" : subject.getName().getString() + " has").withStyle(ChatFormatting.GRAY))
+                    .append(Component.literal(" no pronouns set.").withStyle(ChatFormatting.GRAY)),
                 false
             )
         );

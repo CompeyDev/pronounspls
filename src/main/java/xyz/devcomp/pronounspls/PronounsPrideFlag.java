@@ -4,8 +4,8 @@ import java.util.Optional;
 
 import xyz.devcomp.pronounspls.api.Decoration;
 
-import net.minecraft.text.MutableText;
-import net.minecraft.text.Text;
+import net.minecraft.network.chat.Component;
+import net.minecraft.network.chat.MutableComponent;
 
 public enum PronounsPrideFlag {
     LESBIAN     (0xD62900, 0xFF9B55, 0xFFFFFF, 0xD461A6, 0xA50062),
@@ -48,14 +48,14 @@ public enum PronounsPrideFlag {
      * @param text text to add the formatting to
      * @return the formatted text component
      */
-    public Text apply(String text) {
-        MutableText result = Text.empty();
+    public Component apply(String text) {
+        MutableComponent result = Component.empty();
 
         for (int i = 0; i < text.length(); i++) {
             int color = colors[i % colors.length];
             result.append(
-                Text.literal(String.valueOf(text.charAt(i)))
-                    .styled(style -> style.withColor(color))
+                Component.literal(String.valueOf(text.charAt(i)))
+                    .withStyle(style -> style.withColor(color))
             );
         }
 

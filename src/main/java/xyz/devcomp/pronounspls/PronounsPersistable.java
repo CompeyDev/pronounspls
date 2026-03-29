@@ -1,14 +1,15 @@
 package xyz.devcomp.pronounspls;
 
-import com.google.gson.Gson;
-import com.google.gson.JsonElement;
-import com.google.gson.JsonParser;
-import net.minecraft.server.MinecraftServer;
-import net.minecraft.util.WorldSavePath;
-
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+
+import net.minecraft.server.MinecraftServer;
+import net.minecraft.world.level.storage.LevelResource;
+
+import com.google.gson.Gson;
+import com.google.gson.JsonElement;
+import com.google.gson.JsonParser;
 
 public abstract class PronounsPersistable {
     private final String filename;
@@ -21,7 +22,7 @@ public abstract class PronounsPersistable {
     public abstract void load(JsonElement json) throws IOException;
 
     public void saveToDisk(MinecraftServer server) {
-        Path path = server.getSavePath(WorldSavePath.ROOT)
+        Path path = server.getWorldPath(LevelResource.ROOT)
             .resolve(PronounsPlease.MOD_ID)
             .resolve(filename);
 
@@ -36,7 +37,7 @@ public abstract class PronounsPersistable {
     }
 
     public void loadFromDisk(MinecraftServer server) {
-        Path path = server.getSavePath(WorldSavePath.ROOT)
+        Path path = server.getWorldPath(LevelResource.ROOT)
             .resolve(PronounsPlease.MOD_ID)
             .resolve(filename);
 

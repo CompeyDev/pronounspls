@@ -14,12 +14,13 @@ import xyz.devcomp.pronounspls.PronounsSource;
 import xyz.devcomp.pronounspls.PronounsTeamManager;
 import xyz.devcomp.pronounspls.api.PronounDBClient;
 
-import static net.minecraft.server.command.CommandManager.literal;
+import static net.minecraft.commands.Commands.literal;
+
+import net.minecraft.ChatFormatting;
+import net.minecraft.commands.CommandSourceStack;
+import net.minecraft.network.chat.Component;
 import net.minecraft.server.MinecraftServer;
-import net.minecraft.server.command.ServerCommandSource;
-import net.minecraft.server.network.ServerPlayerEntity;
-import net.minecraft.text.Text;
-import net.minecraft.util.Formatting;
+import net.minecraft.server.level.ServerPlayer;
 
 import com.mojang.brigadier.builder.LiteralArgumentBuilder;
 
@@ -31,15 +32,15 @@ public class RefreshPronounsCommand implements PronounsCommandManager.PronounsCo
     private static final Map<UUID, Instant> lastRefresh = new HashMap<>();
 
     @Override
-    public void register(LiteralArgumentBuilder<ServerCommandSource> root) {
+    public void register(LiteralArgumentBuilder<CommandSourceStack> root) {
         root.then(literal("refresh")
             .executes(ctx -> {
-                ServerCommandSource source = ctx.getSource();
-                ServerPlayerEntity player = source.getPlayerOrThrow();
+                CommandSourceStack source = ctx.getSource();
+                ServerPlayer player = source.getPlayerOrException();
                 MinecraftServer server = source.getServer();
 
                 Instant now = Instant.now();
-                Instant last = Objects.requireNonNullElse(lastRefresh.get(player.getUuid()), Instant.MIN);
+                Instant last = Objects.requireNonNullElse(lastRefresh.get(player.getUUID()), Instant.MIN);
                 Instant expiry = last.plus(COOLDOWN_MS);
 
                 if (now.isBefore(expiry)) {
@@ -47,13 +48,12 @@ public class RefreshPronounsCommand implements PronounsCommandManager.PronounsCo
                     Duration remaining = Duration.between(Instant.now(), expiry);
                     long minutes = remaining.toMinutes();
                     long seconds = remaining.toSecondsPart();
-                    Text formatted = Text.literal(minutes > 0 ? minutes + "m " + seconds + "s" : seconds + "s").formatted(Formatting.BOLD);
+                    Component formatted = Component.literal(minutes > 0 ? minutes + "m " + seconds + "s" : seconds + "s").withStyle(ChatFormatting.BOLD);
 
-                    source.sendFeedback(
-                        () -> PronounsCommandManager.ERROR_PREFIX.copy().append(
-                            Text.literal("You can refresh your pronouns again in ").formatted(Formatting.GRAY).append(formatted)
-                        ),
-                        false
+                    source.sendFailure(
+                        PronounsCommandManager.ERROR_PREFIX.copy().append(
+                            Component.literal("You can refresh your pronouns again in ").withStyle(ChatFormatting.GRAY).append(formatted)
+                        )
                     );
                     return 1;
                 }
@@ -63,14 +63,14 @@ public class RefreshPronounsCommand implements PronounsCommandManager.PronounsCo
                     return 1;
                 }
 
-                PronounsPlease.pronoundb.invalidate(PronounDBClient.Platform.MINECRAFT, player.getUuidAsString());
-                PronounsPlease.pronoundb.lookupAsync(PronounDBClient.Platform.MINECRAFT, player.getUuidAsString())
+                PronounsPlease.pronoundb.invalidate(PronounDBClient.Platform.MINECRAFT, player.getStringUUID());
+                PronounsPlease.pronoundb.lookupAsync(PronounDBClient.Platform.MINECRAFT, player.getStringUUID())
                     .thenAccept(pronouns -> server.execute(() -> {
                         if (pronouns.isEmpty()) {
                             PronounsTeamManager.INSTANCE.removePronouns(player, server);
-                            source.sendFeedback(
+                            source.sendSuccess(
                                 () -> PronounsCommandManager.SUCCESS_PREFIX.copy().append(
-                                    Text.literal("No pronouns found on PronounDB, pronouns removed").formatted(Formatting.GRAY)
+                                    Component.literal("No pronouns found on PronounDB, pronouns removed").withStyle(ChatFormatting.GRAY)
                                 ),
                                 false
                             );
@@ -79,21 +79,20 @@ public class RefreshPronounsCommand implements PronounsCommandManager.PronounsCo
 
                         pronouns.ifPresent(p -> {
                             // Place user in a cooldown
-                            lastRefresh.put(player.getUuid(), Instant.now());
+                            lastRefresh.put(player.getUUID(), Instant.now());
 
                             PronounsTeamManager.INSTANCE.setPronouns(player, new PronounsSource.PronounDB(new WeakReference<>(p)), server);
                             PronounsTeamManager.INSTANCE.syncToPlayer(player, server);
-                            source.sendFeedback(
+                            source.sendSuccess(
                                 () -> PronounsCommandManager.SUCCESS_PREFIX.copy().append(
-                                    Text.literal("Pronouns refreshed from PronounDB")
-                                        .formatted(Formatting.GRAY)
+                                    Component.literal("Pronouns refreshed from PronounDB").withStyle(ChatFormatting.GRAY)
                                 ),
                                 false
                             );
                         });
                     }))
                     .exceptionally(e -> {
-                        Text why = Text.literal(e.getCause().getMessage()).formatted(Formatting.BOLD);
+                        Component why = Component.literal(e.getCause().getMessage()).withStyle(ChatFormatting.BOLD);
                         server.execute(() -> SetPronounsCommand.error("Failed to refresh pronouns from PronounDB: ", why, source));
                         return null;
                     });

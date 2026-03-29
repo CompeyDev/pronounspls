@@ -11,15 +11,16 @@ import xyz.devcomp.pronounspls.api.PronounDBClient;
 import xyz.devcomp.pronounspls.PronounsTeamManager;
 import xyz.devcomp.pronounspls.PronounsTranslationManager;
 
-import static net.minecraft.server.command.CommandManager.argument;
-import static net.minecraft.server.command.CommandManager.literal;
+import static net.minecraft.commands.Commands.argument;
+import static net.minecraft.commands.Commands.literal;
+
+import net.minecraft.ChatFormatting;
+import net.minecraft.commands.CommandSourceStack;
+import net.minecraft.network.chat.Component;
+import net.minecraft.network.chat.MutableComponent;
 import net.minecraft.server.MinecraftServer;
-import net.minecraft.server.command.ServerCommandSource;
-import net.minecraft.server.network.ServerPlayerEntity;
-import net.minecraft.util.StringIdentifiable;
-import net.minecraft.util.Formatting;
-import net.minecraft.text.Text;
-import net.minecraft.text.MutableText;
+import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.util.StringRepresentable;
 
 import com.mojang.brigadier.builder.LiteralArgumentBuilder;
 import com.mojang.brigadier.builder.RequiredArgumentBuilder;
@@ -30,10 +31,11 @@ import com.mojang.brigadier.exceptions.CommandSyntaxException;
 import com.mojang.brigadier.exceptions.DynamicCommandExceptionType;
 
 import org.jetbrains.annotations.Nullable;
+import org.jetbrains.annotations.NotNull;
 
 // TODO: translations for command feedback
 
-enum PronounKey implements StringIdentifiable {
+enum PronounKey implements StringRepresentable {
     HE("pronounspls.pronouns.he"),
     SHE("pronounspls.pronouns.she"),
     THEY("pronounspls.pronouns.they"),
@@ -45,12 +47,12 @@ enum PronounKey implements StringIdentifiable {
     PRONOUNDB(null);
 
     private final String key;
-    public static final Codec<PronounKey> CODEC = StringIdentifiable.createCodec(PronounKey::values);
+    public static final Codec<PronounKey> CODEC = StringRepresentable.fromEnum(PronounKey::values);
 
     PronounKey(String key) { this.key = key; }
 
     @Override
-    public String asString() { return name().toLowerCase(); }
+    public @NotNull String getSerializedName() { return name().toLowerCase(); }
 
     public String getTranslationKey() { return key; }
 }
@@ -59,16 +61,16 @@ class PronounKeyArgumentType {
     private static final DynamicCommandExceptionType INVALID_PRONOUN = new DynamicCommandExceptionType(
         value -> SetPronounsCommand.error(
             "Unknown pronoun ",
-            Text.literal(value.toString()).formatted(Formatting.AQUA),
+            Component.literal(value.toString()).withStyle(ChatFormatting.AQUA),
             null
         )
     );
 
     private static final List<String> PRONOUN_KEYS = Arrays.stream(PronounKey.values())
-        .map(PronounKey::asString)
+        .map(PronounKey::getSerializedName)
         .toList();
 
-    public static RequiredArgumentBuilder<ServerCommandSource, String> pronounArgument(String name) {
+    public static RequiredArgumentBuilder<CommandSourceStack, String> pronounArgument(String name) {
         return argument(name, StringArgumentType.word())
             .suggests((ctx, builder) -> {
                 PRONOUN_KEYS.forEach(builder::suggest);
@@ -76,10 +78,10 @@ class PronounKeyArgumentType {
             });
     }
 
-    public static PronounKey getPronounKey(CommandContext<ServerCommandSource> ctx, String name) throws CommandSyntaxException {
+    public static PronounKey getPronounKey(CommandContext<CommandSourceStack> ctx, String name) throws CommandSyntaxException {
         String value = StringArgumentType.getString(ctx, name);
         return Arrays.stream(PronounKey.values())
-            .filter(k -> k.asString().equals(value))
+            .filter(k -> k.getSerializedName().equals(value))
             .findFirst()
             .orElseThrow(() -> INVALID_PRONOUN.create(value));
     }
@@ -88,12 +90,12 @@ class PronounKeyArgumentType {
 @PronounsCommandManager.CommandInfo(usage = "/pronounspls set pronoun <pronoun>", description = "Set your pronouns")
 public class SetPronounsCommand implements PronounsCommandManager.PronounsCommand {
     @Override
-    public void register(LiteralArgumentBuilder<ServerCommandSource> root) {
+    public void register(LiteralArgumentBuilder<CommandSourceStack> root) {
         root.then(literal("set")
             .then(PronounKeyArgumentType.pronounArgument("pronoun")
                 .executes(ctx -> {
-                    ServerCommandSource source = ctx.getSource();
-                    ServerPlayerEntity player = source.getPlayerOrThrow();
+                    CommandSourceStack source = ctx.getSource();
+                    ServerPlayer player = source.getPlayerOrException();
                     MinecraftServer server = source.getServer();
                     PronounKey key = PronounKeyArgumentType.getPronounKey(ctx, "pronoun");
 
@@ -111,13 +113,13 @@ public class SetPronounsCommand implements PronounsCommandManager.PronounsComman
         );
     }
 
-    private void setFromPronounDB(ServerPlayerEntity player, MinecraftServer server, ServerCommandSource source) {
+    private void setFromPronounDB(ServerPlayer player, MinecraftServer server, CommandSourceStack source) {
         if (PronounsPlease.pronoundb == null) {
             error("PronounDB is unavailable in offline mode", null, source);
             return;
         }
 
-        PronounsPlease.pronoundb.lookupAsync(PronounDBClient.Platform.MINECRAFT, player.getUuid().toString())
+        PronounsPlease.pronoundb.lookupAsync(PronounDBClient.Platform.MINECRAFT, player.getStringUUID())
             .thenAccept(pronouns -> pronouns.ifPresent(p ->
                 server.execute(() -> {
                     String translatedPronouns = PronounsTranslationManager
@@ -126,45 +128,45 @@ public class SetPronounsCommand implements PronounsCommandManager.PronounsComman
 
                     PronounsTeamManager.INSTANCE.setPronouns(player, new PronounsSource.PronounDB(new WeakReference<>(p)), server);
                     PronounsTeamManager.INSTANCE.syncToPlayer(player, server);
-                    source.sendFeedback(
+                    source.sendSuccess(
                         () -> PronounsCommandManager.SUCCESS_PREFIX.copy().append(
-                            Text.literal("Pronouns set to ")
-                                .formatted(Formatting.GRAY)
-                                .append(Text.literal(translatedPronouns).formatted(Formatting.AQUA, Formatting.ITALIC))
-                                .append(Text.literal(" from PrononunDB"))
+                            Component.literal("Pronouns set to ")
+                                .withStyle(ChatFormatting.GRAY)
+                                .append(Component.literal(translatedPronouns).withStyle(ChatFormatting.AQUA, ChatFormatting.ITALIC))
+                                .append(Component.literal(" from PrononunDB"))
                         ),
                         false
                     );
                 })
             ))
             .exceptionally(e -> {
-                Text why = Text.literal(e.getCause().getMessage()).formatted(Formatting.BOLD);
+                Component why = Component.literal(e.getCause().getMessage()).withStyle(ChatFormatting.BOLD);
                 server.execute(() -> error("Oh no! An error occurred while setting your pronouns: ", why, source));
                 return null;
             });
     }
 
-    private void setCustom(ServerPlayerEntity player, PronounKey key, MinecraftServer server, ServerCommandSource source) {
+    private void setCustom(ServerPlayer player, PronounKey key, MinecraftServer server, CommandSourceStack source) {
         PronounsTeamManager.INSTANCE.setPronouns(player, new PronounsSource.Custom(key.getTranslationKey()), server);
         PronounsTeamManager.INSTANCE.syncToPlayer(player, server);
 
-        source.sendFeedback(
+        source.sendSuccess(
             () -> PronounsCommandManager.SUCCESS_PREFIX.copy().append(
-                Text.literal("Pronouns set to ")
-                    .formatted(Formatting.GRAY)
-                    .append(Text.literal(key.asString()).formatted(Formatting.AQUA, Formatting.ITALIC))
+                Component.literal("Pronouns set to ")
+                    .withStyle(ChatFormatting.GRAY)
+                    .append(Component.literal(key.getSerializedName()).withStyle(ChatFormatting.AQUA, ChatFormatting.ITALIC))
             ),
             false
         );
     }
 
-    protected static Text error(String message, @Nullable Text special, @Nullable ServerCommandSource source) {
-        MutableText formattedMessage = Text.literal(message).formatted(Formatting.GRAY);
+    protected static Component error(String message, @Nullable Component special, @Nullable CommandSourceStack source) {
+        MutableComponent formattedMessage = Component.literal(message).withStyle(ChatFormatting.GRAY);
         if (special != null) formattedMessage.append(special);
 
-        Text formatted = PronounsCommandManager.ERROR_PREFIX.copy().append(formattedMessage);
+        Component formatted = PronounsCommandManager.ERROR_PREFIX.copy().append(formattedMessage);
         if (source != null) {
-            source.sendFeedback(() -> formatted, false);
+            source.sendFailure(formatted);
         }
 
         return formatted;

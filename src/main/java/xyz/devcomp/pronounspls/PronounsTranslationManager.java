@@ -7,32 +7,34 @@ import java.time.temporal.ChronoUnit;
 import java.util.HashMap;
 import java.util.Map;
 
-import net.minecraft.resource.ResourceManager;
-import net.minecraft.resource.SynchronousResourceReloader;
-import net.minecraft.server.network.ServerPlayerEntity;
-import net.minecraft.util.Identifier;
+import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.server.packs.resources.ResourceManager;
+import net.minecraft.server.packs.resources.ResourceManagerReloadListener;
+import net.minecraft.resources.Identifier;
 
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
+
+import org.jetbrains.annotations.NotNull;
 
 /**
  * Manages server-side translations for pronoun variants by loading lang files
  * from {@code data/pronounspls/lang/<language>.json} during datapack reload.
  *
- * <p>This is used in place of {@link net.minecraft.text.Text#translatable} since
+ * <p>This is used in place of {@link net.minecraft.network.chat.Component#translatable} since
  * translatables are handled on the client side and this mod runs purely on the
  * server.
  */
-public class PronounsTranslationManager implements SynchronousResourceReloader {
+public class PronounsTranslationManager implements ResourceManagerReloadListener {
     private final Map<String, Map<String, String>> translations = new HashMap<>();
     private final Map<String, String> fallbacks = new HashMap<>();
 
     public static final PronounsTranslationManager INSTANCE = new PronounsTranslationManager();
     private static final String DEFAULT_LOCALE = "en_us";
-    private static final Identifier FALLBACKS_ID = Identifier.of(PronounsPlease.MOD_ID, "lang_fallbacks.json");
+    private static final Identifier FALLBACKS_ID = Identifier.fromNamespaceAndPath(PronounsPlease.MOD_ID, "lang_fallbacks.json");
 
     @Override
-    public String getName() {
+    public @NotNull String getName() {
         return getFabricId().toString();
     }
 
@@ -40,7 +42,7 @@ public class PronounsTranslationManager implements SynchronousResourceReloader {
      * Gets the unique identifier for this resource reload listener.
      */
     public static Identifier getFabricId() {
-        return Identifier.of(PronounsPlease.MOD_ID, "translations");
+        return Identifier.fromNamespaceAndPath(PronounsPlease.MOD_ID, "translations");
     }
 
     /**
@@ -51,13 +53,13 @@ public class PronounsTranslationManager implements SynchronousResourceReloader {
      * @param manager the resource manager providing access to datapack files
      */
     @Override
-    public void reload(ResourceManager manager) {
+    public void onResourceManagerReload(ResourceManager manager) {
         translations.clear();
         fallbacks.clear();
 
         // Load translations
         Instant start = Instant.now();
-        manager.findResources("lang", path -> path.getPath().endsWith(".json"))
+        manager.listResources("lang", path -> path.getPath().endsWith(".json"))
             .forEach((id, resource) -> {
                 if (!id.getNamespace().equals(PronounsPlease.MOD_ID)) return;
 
@@ -65,7 +67,7 @@ public class PronounsTranslationManager implements SynchronousResourceReloader {
                     .replace("lang/", "")
                     .replace(".json", "");
 
-                try (var stream = resource.getInputStream()) {
+                try (var stream = resource.open()) {
                     JsonObject obj = JsonParser.parseReader(new InputStreamReader(stream)).getAsJsonObject();
                     Map<String, String> langMap = new HashMap<>();
                     obj.entrySet().forEach(e -> langMap.put(e.getKey(), e.getValue().getAsString()));
@@ -80,7 +82,7 @@ public class PronounsTranslationManager implements SynchronousResourceReloader {
 
         // Load fallbacks
         manager.getResource(FALLBACKS_ID).ifPresent(resource -> {
-            try (var stream = resource.getInputStream()) {
+            try (var stream = resource.open()) {
                 JsonObject obj = JsonParser.parseReader(new InputStreamReader(stream)).getAsJsonObject();
                 obj.entrySet().forEach(e -> {
                     // Invert the fallbacks to have a constant O(1) read complexity
@@ -130,7 +132,7 @@ public class PronounsTranslationManager implements SynchronousResourceReloader {
      * @param key    the translation key to look up
      * @return the translated string
      */
-    public String translate(ServerPlayerEntity player, String key) {
-        return this.translate(player.getClientOptions().language(), key);
+    public String translate(ServerPlayer player, String key) {
+        return this.translate(player.clientInformation().language(), key);
     }
 }
