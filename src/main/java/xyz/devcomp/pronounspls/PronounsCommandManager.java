@@ -8,22 +8,23 @@ import java.util.List;
 
 import xyz.devcomp.pronounspls.commands.*;
 
-import static net.minecraft.server.command.CommandManager.literal;
-import net.minecraft.command.CommandRegistryAccess;
-import net.minecraft.server.command.CommandManager;
-import net.minecraft.server.command.ServerCommandSource;
-import net.minecraft.util.Formatting;
-import net.minecraft.text.Text;
+import static net.minecraft.commands.Commands.literal;
+
+import net.minecraft.commands.CommandBuildContext;
+import net.minecraft.commands.CommandSourceStack;
+import net.minecraft.commands.Commands;
+import net.minecraft.network.chat.Component;
+import net.minecraft.ChatFormatting;
 
 import com.mojang.brigadier.CommandDispatcher;
 import com.mojang.brigadier.builder.LiteralArgumentBuilder;
 
 public class PronounsCommandManager {
-    public static final Text SUCCESS_PREFIX = Text.literal("✔ ").formatted(Formatting.GREEN);
-    public static final Text ERROR_PREFIX = Text.literal("✖ ").formatted(Formatting.RED);
+    public static final Component SUCCESS_PREFIX = Component.literal("✔ ").withStyle(ChatFormatting.GREEN);
+    public static final Component ERROR_PREFIX   = Component.literal("✖ ").withStyle(ChatFormatting.RED);
 
     public interface PronounsCommand {
-        void register(LiteralArgumentBuilder<ServerCommandSource> root);
+        void register(LiteralArgumentBuilder<CommandSourceStack> root);
     }
 
     @Retention(RetentionPolicy.RUNTIME)
@@ -40,8 +41,8 @@ public class PronounsCommandManager {
         new RefreshPronounsCommand()
     );
 
-    public static void register(CommandDispatcher<ServerCommandSource> dispatcher, CommandRegistryAccess _registryAccess, CommandManager.RegistrationEnvironment _environment) {
-        LiteralArgumentBuilder<ServerCommandSource> root = literal(PronounsPlease.MOD_ID);
+    public static void register(CommandDispatcher<CommandSourceStack> dispatcher, CommandBuildContext _ctx, Commands.CommandSelection _selection) {
+        LiteralArgumentBuilder<CommandSourceStack> root = literal(PronounsPlease.MOD_ID);
 
         for (PronounsCommand subcommand : SUBCOMMANDS) {
             subcommand.register(root);

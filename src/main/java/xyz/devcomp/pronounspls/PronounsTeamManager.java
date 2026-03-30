@@ -5,14 +5,14 @@ import java.util.*;
 
 import xyz.devcomp.pronounspls.codec.PronounsSourceCodec;
 
-import net.minecraft.entity.LivingEntity;
-import net.minecraft.network.packet.s2c.play.TeamS2CPacket;
-import net.minecraft.scoreboard.Scoreboard;
-import net.minecraft.scoreboard.Team;
+import net.minecraft.ChatFormatting;
+import net.minecraft.network.chat.Component;
+import net.minecraft.network.protocol.game.ClientboundSetPlayerTeamPacket;
 import net.minecraft.server.MinecraftServer;
-import net.minecraft.server.network.ServerPlayerEntity;
-import net.minecraft.text.Text;
-import net.minecraft.util.Formatting;
+import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.scores.Scoreboard;
+import net.minecraft.world.scores.PlayerTeam;
 
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
@@ -66,13 +66,13 @@ public class PronounsTeamManager extends PronounsPersistable {
      * @param source the pronouns source (PronounDB weak ref or custom translation key)
      * @param server the minecraft server instance
      */
-    public void setPronouns(ServerPlayerEntity player, PronounsSource source, MinecraftServer server) {
+    public void setPronouns(ServerPlayer player, PronounsSource source, MinecraftServer server) {
         Optional<String> pronounsKey = resolveKey(source);
         if (pronounsKey.isEmpty()) return;
 
-        PronounsPlease.LOGGER.info("Setting pronouns for {} to {}", player.getStringifiedName(), pronounsKey.get());
+        PronounsPlease.LOGGER.info("Setting pronouns for {} to {}", player.getPlainTextName(), pronounsKey.get());
         removePronouns(player, server);
-        playerPronouns.put(player.getUuid(), source);
+        playerPronouns.put(player.getUUID(), source);
         saveToDisk(server); // FIXME: IO call which can be overhead with large simultaneous joins, do async debounce?
         syncToAll(player, server);
     }
@@ -83,14 +83,14 @@ public class PronounsTeamManager extends PronounsPersistable {
      * @param player the player to remove pronouns for
      * @param server the minecraft server instance
      */
-    public void removePronouns(ServerPlayerEntity player, MinecraftServer server) {
-        PronounsPlease.LOGGER.info("Removing pronouns for {}", player.getStringifiedName());
-        if (!playerPronouns.containsKey(player.getUuid())) return;
+    public void removePronouns(ServerPlayer player, MinecraftServer server) {
+        PronounsPlease.LOGGER.info("Removing pronouns for {}", player.getPlainTextName());
+        if (!playerPronouns.containsKey(player.getUUID())) return;
 
-        String teamName = PronounsPlease.MOD_ID + "_" + player.getUuid();
+        String teamName = PronounsPlease.MOD_ID + "_" + player.getUUID();
         Scoreboard tempScoreboard = new Scoreboard();
-        Team tempTeam = tempScoreboard.addTeam(teamName);
-        server.getPlayerManager().sendToAll(TeamS2CPacket.updateRemovedTeam(tempTeam));
+        PlayerTeam tempTeam = tempScoreboard.addPlayerTeam(teamName);
+        server.getPlayerList().broadcastAll(ClientboundSetPlayerTeamPacket.createRemovePacket(tempTeam));
     }
 
     /**
@@ -99,17 +99,17 @@ public class PronounsTeamManager extends PronounsPersistable {
      * @param recipient the newly joined player to sync to
      * @param server    the minecraft server instance
      */
-    public void syncToPlayer(ServerPlayerEntity recipient, MinecraftServer server) {
-        PronounsPlease.LOGGER.info("Syncing virtual teams to player {}", recipient.getStringifiedName());
+    public void syncToPlayer(ServerPlayer recipient, MinecraftServer server) {
+        PronounsPlease.LOGGER.info("Syncing virtual teams to player {}", recipient.getPlainTextName());
 
         for (Map.Entry<UUID, PronounsSource> entry : playerPronouns.entrySet()) {
             resolveKey(entry.getValue()).ifPresent(key -> {
                 // The joining player this was called for has not been placed as an entity
                 // and so their entry returns null, but we still must send the packets to
                 // them so that they can see their own pronouns
-                ServerPlayerEntity target = entry.getKey().equals(recipient.getUuid())
+                ServerPlayer target = entry.getKey().equals(recipient.getUUID())
                     ? recipient
-                    : server.getPlayerManager().getPlayer(entry.getKey());
+                    : server.getPlayerList().getPlayer(entry.getKey());
 
                 if (target != null) {
                     sendTeamPacket(target, key, resolveFlag(entry.getValue()).orElse(null), recipient);
@@ -125,22 +125,22 @@ public class PronounsTeamManager extends PronounsPersistable {
     /**
      * Syncs a player's pronouns to all connected clients.
      *
-     * <p>This does the opposite of what {@link #syncToPlayer(ServerPlayerEntity, MinecraftServer)},
+     * <p>This does the opposite of what {@link #syncToPlayer(ServerPlayer, MinecraftServer)},
      * does. Typically called when a player joins to ensure all existing clients
      * see their pronouns.
      *
-     * <p><b>NOTE</b>: {@link #setPronouns(ServerPlayerEntity, PronounsSource, MinecraftServer)}
+     * <p><b>NOTE</b>: {@link #setPronouns(ServerPlayer, PronounsSource, MinecraftServer)}
      * already calls this method to force a sync after setting the pronouns.
      *
      * @param player the player whose pronouns should be synced
      * @param server the minecraft server instance
      */
-    public void syncToAll(ServerPlayerEntity player, MinecraftServer server) {
+    public void syncToAll(ServerPlayer player, MinecraftServer server) {
         Optional<String> key = getPronounsKey(player);
         if (key.isEmpty()) return;
 
-        for (ServerPlayerEntity recipient : server.getPlayerManager().getPlayerList()) {
-            sendTeamPacket(player, key.get(), resolveFlag(playerPronouns.get(player.getUuid())).orElse(null), recipient);
+        for (ServerPlayer recipient : server.getPlayerList().getPlayers()) {
+            sendTeamPacket(player, key.get(), resolveFlag(playerPronouns.get(player.getUUID())).orElse(null), recipient);
         }
     }
 
@@ -150,27 +150,27 @@ public class PronounsTeamManager extends PronounsPersistable {
      * would cause all recipients to see the last translation written.
      */
     private void sendTeamPacket(
-        ServerPlayerEntity target,
+        ServerPlayer target,
         String pronounsKey,
         @Nullable PronounsPrideFlag prideFlag,
-        ServerPlayerEntity recipient
+        ServerPlayer recipient
     ) {
-        String teamName = PronounsPlease.MOD_ID + "_" + target.getUuid();
+        String teamName = PronounsPlease.MOD_ID + "_" + target.getUUID();
         Scoreboard tempScoreboard = new Scoreboard();
-        Team tempTeam = tempScoreboard.addTeam(teamName);
+        PlayerTeam tempTeam = tempScoreboard.addPlayerTeam(teamName);
 
         String translated = PronounsTranslationManager
             .INSTANCE
             .translate(recipient, pronounsKey);
 
         // TODO: make pride flag application optional and configurable
-        Text prefix = prideFlag != null ? prideFlag.apply(translated) : Text.literal(translated).formatted(Formatting.GRAY);
+        Component prefix = prideFlag != null ? prideFlag.apply(translated) : Component.literal(translated).withStyle(ChatFormatting.GRAY);
         // MutableText separator = Text.literal("  ").styled(s -> s.withObfuscated(true).withColor(Formatting.BOLD));
 
-        tempTeam.getPlayerList().add(target.getStringifiedName());
-        tempTeam.setPrefix(Text.literal("[").append(prefix).append("] "));
+        tempTeam.getPlayers().add(target.getPlainTextName());
+        tempTeam.setPlayerPrefix(Component.literal("[").append(prefix).append("] "));
 
-        recipient.networkHandler.sendPacket(TeamS2CPacket.updateTeam(tempTeam, true));
+        recipient.connection.send(ClientboundSetPlayerTeamPacket.createAddOrModifyPacket(tempTeam, true));
     }
 
     /**
@@ -200,13 +200,13 @@ public class PronounsTeamManager extends PronounsPersistable {
      * @param entityUuid the tamed entity's UUID string (from getNameForScoreboard)
      * @param recipient  the client to send the packets to
      */
-    public void assignPetDummyTeam(String entityUuid, ServerPlayerEntity recipient) {
+    public void assignPetDummyTeam(String entityUuid, ServerPlayer recipient) {
         String dummyTeamName = PronounsPlease.MOD_ID + "_pet_" + entityUuid;
         Scoreboard tempScoreboard = new Scoreboard();
-        Team dummyTeam = tempScoreboard.addTeam(dummyTeamName);
+        PlayerTeam dummyTeam = tempScoreboard.addPlayerTeam(dummyTeamName);
 
-        recipient.networkHandler.sendPacket(TeamS2CPacket.updateTeam(dummyTeam, true));
-        recipient.networkHandler.sendPacket(TeamS2CPacket.changePlayerTeam(dummyTeam, entityUuid, TeamS2CPacket.Operation.ADD));
+        recipient.connection.send(ClientboundSetPlayerTeamPacket.createAddOrModifyPacket(dummyTeam, true));
+        recipient.connection.send(ClientboundSetPlayerTeamPacket.createPlayerPacket(dummyTeam, entityUuid, ClientboundSetPlayerTeamPacket.Action.ADD));
     }
 
     /**
@@ -215,12 +215,12 @@ public class PronounsTeamManager extends PronounsPersistable {
      * @param entityUuid the tamed entity's UUID string
      * @param recipient  the client to send the packet to
      */
-    public void removePetDummyTeam(String entityUuid, ServerPlayerEntity recipient) {
+    public void removePetDummyTeam(String entityUuid, ServerPlayer recipient) {
         String dummyTeamName = PronounsPlease.MOD_ID + "_pet_" + entityUuid;
         Scoreboard tempScoreboard = new Scoreboard();
-        Team dummyTeam = tempScoreboard.addTeam(dummyTeamName);
+        PlayerTeam dummyTeam = tempScoreboard.addPlayerTeam(dummyTeamName);
 
-        recipient.networkHandler.sendPacket(TeamS2CPacket.updateRemovedTeam(dummyTeam));
+        recipient.connection.send(ClientboundSetPlayerTeamPacket.createRemovePacket(dummyTeam));
     }
 
     /**
@@ -242,14 +242,14 @@ public class PronounsTeamManager extends PronounsPersistable {
     /**
      * Gets the pronouns key registered for a player entity, if present and still alive.
      */
-    public Optional<String> getPronounsKey(ServerPlayerEntity player) {
-        return getPronounsKey(player.getUuid());
+    public Optional<String> getPronounsKey(ServerPlayer player) {
+        return getPronounsKey(player.getUUID());
     }
 
     /**
      * Gets the pronouns registered for a player in their language, if present and still alive.
      */
-    public Optional<String> getTranslatedPronouns(ServerPlayerEntity player) {
+    public Optional<String> getTranslatedPronouns(ServerPlayer player) {
         return getPronounsKey(player)
             .map(key -> PronounsTranslationManager.INSTANCE.translate(player, key));
     }

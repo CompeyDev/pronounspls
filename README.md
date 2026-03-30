@@ -42,9 +42,9 @@ them below! :D
 
 Nameplates and player list prefixes make use of Minecraft's scoreboard team system under the hood, which does not support per-player
 name prefixes and suffixes. Registering real teams on the server scoreboard could conflict with actual objectives and also prevent
-localization (see below), we construct `TeamS2CPacket` instances backed by throwaway `Scoreboard` and `Team` objects that are never
-registered persistently. These packets are sent directly to each client's network handler and immediately discarded server-side,
-leaving no trace on the actual scoreboard.
+localization (see below), we construct `ClientboundSetPlayerTeamPacket` instances backed by throwaway `Scoreboard` and `PlayerTeam` 
+objects that are never registered persistently. These packets are sent directly to each client's network handler and immediately 
+discarded server-side, leaving no trace on the actual scoreboard.
 
 ### Per-Client Translation
 
@@ -53,8 +53,8 @@ actual translation is performed by the client using their local locale files. Ho
 each client, we intercept the packets per-recipient and resolve the player's pronoun translation key into their preferred language
 before the packet is built and dispatched.
 
-We use the same approach for chat messages, where we hook into `PlayerManager.broadcast`, and embed a carrier containing the pronoun
-as a translation key. In `ServerPlayerEntity.sendChatMessage` where the packets are to be dispatched, we translate this to the recipient's
+We use the same approach for chat messages, where we hook into `PlayerList.broadcastChatMessage`, and embed a carrier containing the 
+pronoun as a translation key. In `ServerPlayer.sendChatMessage` where the packets are to be dispatched, we translate this to the recipient's
 language before it is actually sent.
 
 ### PronounDB Integration & Caching
