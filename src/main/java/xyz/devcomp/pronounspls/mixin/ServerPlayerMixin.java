@@ -24,7 +24,7 @@ import org.spongepowered.asm.mixin.injection.ModifyVariable;
 @Mixin(ServerPlayer.class)
 public class ServerPlayerMixin {
     @ModifyVariable(
-        method = "sendChatMessage(Lnet/minecraft/network/chat/OutgoingChatMessage;ZLnet/minecraft/network/chat/ChatType$Bound;)V\n",
+        method = "sendChatMessage(Lnet/minecraft/network/chat/OutgoingChatMessage;ZLnet/minecraft/network/chat/ChatType$Bound;)V",
         at = @At("HEAD"),
         argsOnly = true
     )
